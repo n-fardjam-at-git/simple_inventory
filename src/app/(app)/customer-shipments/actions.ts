@@ -34,10 +34,55 @@ export async function createShipment(formData: FormData) {
 
 export async function addShipmentProduct(shipmentId: string, formData: FormData) {
   const supabase = await createClient();
+  const productId = String(formData.get("product_id"));
+  const { data: prod } = await supabase
+    .from("products")
+    .select("type, is_active")
+    .eq("id", productId)
+    .single();
+  const type = prod?.type ?? 1;
+  if (prod && prod.is_active === false) {
+    redirect(
+      `/customer-shipments/${shipmentId}?error=` +
+        encodeURIComponent("That product is inactive."),
+    );
+  }
+  if (type === 3) {
+    const { data: lines } = await supabase
+      .from("customer_shipment_products")
+      .select("id, products ( type )")
+      .eq("customer_shipment_id", shipmentId);
+    const hasFreight = (lines ?? []).some((l) => {
+      const p = l.products as unknown as { type: number } | { type: number }[] | null;
+      const t = Array.isArray(p) ? p[0]?.type : p?.type;
+      return t === 3;
+    });
+    if (hasFreight) {
+      redirect(
+        `/customer-shipments/${shipmentId}?error=` +
+          encodeURIComponent("A shipment can have only one freight charge."),
+      );
+    }
+  }
   await supabase.from("customer_shipment_products").insert({
     customer_shipment_id: shipmentId,
-    product_id: String(formData.get("product_id")),
+    product_id: productId,
+    qty: type === 3 ? 1 : type === 2 ? 1 : 0,
   });
+  revalidatePath(`/customer-shipments/${shipmentId}`);
+}
+
+export async function saveShipmentQty(shipmentId: string, productRowId: string, formData: FormData) {
+  const supabase = await createClient();
+  const { data: line } = await supabase
+    .from("customer_shipment_products")
+    .select("product_id, products ( type )")
+    .eq("id", productRowId)
+    .single();
+  const p = line?.products as unknown as { type: number } | null;
+  const type = p?.type ?? 1;
+  const qty = type === 3 ? 1 : Math.max(0, Number(formData.get("qty") ?? 0));
+  await supabase.from("customer_shipment_products").update({ qty }).eq("id", productRowId);
   revalidatePath(`/customer-shipments/${shipmentId}`);
 }
 

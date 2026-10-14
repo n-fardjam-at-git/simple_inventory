@@ -1,0 +1,14 @@
+---
+description: Products setting page — merchandise product detail at /products/[id], opened from Settings on the merchandise Fit List. Apply when the user says products setting page or product settings.
+alwaysApply: false
+---
+
+# Products setting page
+
+Route: `src/app/(app)/products/[id]/page.tsx` (`/products/[id]`).
+
+Opened from the merchandise Fit List via the **Settings** link (not from Charges & freight).
+
+This is the per-product settings screen: line price, size×drop subset, size upcharges. It is not the Products Fit List (`/products`) and not Inventory.
+
+When the user says **products setting page**, change this route—not the list.

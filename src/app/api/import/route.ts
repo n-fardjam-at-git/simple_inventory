@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { applyMappings, readSheetHeadersAndRows, type Mapping } from "@/lib/excel/parse";
+import { toSentenceCase } from "@/lib/text-case";
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   if (template.target === "customers") {
     for (let i = 0; i < mapped.length; i++) {
       const row = mapped[i];
-      const name = row.company_name?.trim();
+      const name = toSentenceCase(row.company_name?.trim() ?? "");
       const sage = row.account_number?.trim() || null;
       if (!name && !sage) {
         failed.push({ row: i + 2, reason: "empty" });
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
     for (let i = 0; i < mapped.length; i++) {
       const row = mapped[i];
       const sage = row.account_number?.trim();
-      const name = row.company_name?.trim();
+      const name = toSentenceCase(row.company_name?.trim() ?? "");
       let customer = null;
       if (sage) {
         const { data } = await supabase

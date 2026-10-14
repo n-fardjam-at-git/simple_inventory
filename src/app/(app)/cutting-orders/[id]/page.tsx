@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/auth";
 import { PageTitle, Card, Btn } from "@/components/ui";
+import { cuttingOrderLabel } from "@/lib/cutting-order";
 import { setOrderStatus, setProductStatus } from "../actions";
 
 export default async function CuttingOrderDetail({
@@ -19,12 +20,12 @@ export default async function CuttingOrderDetail({
     .single();
   const { data: lines } = await supabase
     .from("cutting_order_products")
-    .select("product_id, status, products ( lots ( lot_no ), models ( name ) )")
+    .select("product_id, status, products ( name )")
     .eq("cutting_order_id", id);
 
   return (
     <div className="space-y-4">
-      <PageTitle title={`Cutting order ${order?.reference ?? ""}`} />
+      <PageTitle title={cuttingOrderLabel(order?.order_num as number | undefined)} />
       <p className="text-sm text-stone-600">
         Vendor {(order?.vendors as { name: string } | null)?.name} · Arrival{" "}
         {order?.arrival_date} · Status {order?.status}
@@ -41,14 +42,11 @@ export default async function CuttingOrderDetail({
         <h2 className="mb-2 font-medium">Products</h2>
         <ul className="space-y-2 text-sm">
           {(lines ?? []).map((l) => {
-            const p = l.products as unknown as {
-              lots: { lot_no: string };
-              models: { name: string };
-            };
+            const p = l.products as unknown as { name: string };
             return (
               <li key={l.product_id} className="flex items-center justify-between gap-2">
                 <span>
-                  {p?.lots?.lot_no} · {p?.models?.name} — {l.status}
+                  {p?.name} — {l.status}
                 </span>
                 <form action={setProductStatus.bind(null, id)} className="flex gap-1">
                   <input type="hidden" name="product_id" value={l.product_id} />

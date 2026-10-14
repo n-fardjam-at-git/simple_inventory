@@ -1,0 +1,17 @@
+---
+description: Product size/drop subset rules — add freely; do not remove a size or drop while it has on-hand qty. Future customer orders must use the same lock.
+alwaysApply: false
+---
+
+# Product size / drop subset
+
+On the **products setting page**, subset changes follow:
+
+- **Add** a size or drop anytime (new cells start at qty 0).
+- **Remove** a size or drop only if **every cell on that size or drop has qty on hand = 0**.
+- Server `saveSubset` re-applies this lock so a disabled checkbox cannot be bypassed.
+- Checked boxes with stock stay checked (disabled) until inventory is zeroed.
+
+## Future: customer orders
+
+When customer **orders** (order tables) exist, treat **open / unshipped order qty** the same as on-hand: do not allow removing a size or drop that still has ordered units. Inventory + orders both block remove. Update `saveSubset` and the subset UI together when orders ship.

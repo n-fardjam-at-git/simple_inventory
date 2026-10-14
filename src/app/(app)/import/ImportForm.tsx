@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Btn } from "@/components/ui";
+import { ComboBox } from "@/components/ComboBox";
 
 type Template = { id: string; name: string; target: string; mappings: unknown };
 
@@ -33,13 +34,16 @@ export function ImportForm({ templates }: { templates: Template[] }) {
     <form onSubmit={onSubmit} className="space-y-3 text-sm">
       <label className="block">
         Template
-        <select name="template_id" required className="ml-2 rounded border px-2 py-1">
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name} ({t.target})
-            </option>
-          ))}
-        </select>
+        <ComboBox
+          name="template_id"
+          required
+          placeholder="Template"
+          className="ml-2 rounded border px-2 py-1"
+          options={templates.map((t) => ({
+            id: t.id,
+            label: `${t.name} (${t.target})`,
+          }))}
+        />
       </label>
       <label className="block">
         Workbook
@@ -58,13 +62,13 @@ export function ImportForm({ templates }: { templates: Template[] }) {
       {sheets.length ? (
         <label className="block">
           Sheet
-          <select name="sheet" className="ml-2 rounded border px-2 py-1">
-            {sheets.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <ComboBox
+            name="sheet"
+            required
+            placeholder="Sheet"
+            className="ml-2 rounded border px-2 py-1"
+            options={sheets.map((s) => ({ id: s, label: s }))}
+          />
         </label>
       ) : null}
       {headers.length ? (

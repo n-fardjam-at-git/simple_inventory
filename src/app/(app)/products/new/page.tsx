@@ -1,15 +1,31 @@
-import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/auth";
-import { PageTitle, Card, Btn } from "@/components/ui";
-import { createProduct } from "../actions";
+import { PageTitle, Card } from "@/components/ui";
+import { createClient } from "@/lib/supabase/server";
+import { NewProductForm } from "../NewProductForm";
+import { asSeasonRows } from "@/lib/season";
 
-export default async function NewProductPage() {
+export default async function NewMerchandisePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   await requireRoles(["admin"]);
+  const params = await searchParams;
+  const errorText =
+    params.error === "exists"
+      ? "That lot and model already exist as a product. Open it from Products instead of creating it again."
+      : params.error
+        ? decodeURIComponent(params.error)
+        : null;
   const supabase = await createClient();
-  const { data: lots } = await supabase.from("lots").select("id, lot_no");
+  const { data: lots } = await supabase
+    .from("lots")
+    .select("id, lot_no")
+    .eq("is_active", true);
   const { data: models } = await supabase
     .from("models")
-    .select("id, name, size_chart_id, items ( name )");
+    .select("id, name, size_chart_id, items ( name )")
+    .eq("is_active", true);
   const { data: sizes } = await supabase
     .from("size_chart_sizes")
     .select("id, code, chart_id, sort_order")
@@ -18,74 +34,33 @@ export default async function NewProductPage() {
     .from("size_chart_drops")
     .select("id, code, chart_id, sort_order")
     .order("sort_order");
+  const { data: seasons } = await supabase
+    .from("seasons")
+    .select("id, year, start_season, is_combo, season");
+  const { data: collections } = await supabase
+    .from("collections")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("name");
 
   return (
     <div>
-      <PageTitle title="New product" />
+      <PageTitle title="New merchandise" />
+      {errorText ? (
+        <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {errorText}
+        </p>
+      ) : null}
       <Card>
-        <form action={createProduct} className="space-y-4 text-sm">
-          <label className="block">
-            Lot
-            <select name="lot_id" required className="ml-2 rounded border px-2 py-1">
-              {(lots ?? []).map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.lot_no}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            Model
-            <select name="model_id" required className="ml-2 rounded border px-2 py-1">
-              {(models ?? []).map((m) => {
-                const item = m.items as unknown as { name: string };
-                return (
-                  <option key={m.id} value={m.id}>
-                    {item?.name} · {m.name}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
-          <label className="block">
-            Line price
-            <input
-              name="standard_price"
-              type="number"
-              step="0.01"
-              defaultValue={0}
-              className="ml-2 rounded border px-2 py-1"
-            />
-          </label>
-          <p className="text-stone-500">
-            Check sizes and drops from the model chart. Defaults: select all shown
-            below (all charts listed; uncheck those not on this product). Prefer
-            matching the chosen model’s chart.
-          </p>
-          <div>
-            <p className="mb-1 font-medium">Sizes</p>
-            <div className="flex flex-wrap gap-2">
-              {(sizes ?? []).map((s) => (
-                <label key={s.id}>
-                  <input className="mr-1" type="checkbox" name="size_id" value={s.id} defaultChecked />
-                  {s.code}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="mb-1 font-medium">Drops</p>
-            <div className="flex flex-wrap gap-2">
-              {(drops ?? []).map((d) => (
-                <label key={d.id}>
-                  <input className="mr-1" type="checkbox" name="drop_id" value={d.id} defaultChecked />
-                  {d.code}
-                </label>
-              ))}
-            </div>
-          </div>
-          <Btn type="submit">Create</Btn>
-        </form>
+        <NewProductForm
+          kind="merchandise"
+          lots={lots ?? []}
+          models={(models ?? []) as { id: string; name: string; size_chart_id: string; items: unknown }[]}
+          sizes={sizes ?? []}
+          drops={drops ?? []}
+          seasons={asSeasonRows(seasons ?? [])}
+          collections={collections ?? []}
+        />
       </Card>
     </div>
   );

@@ -7,29 +7,53 @@ import { parseCellFields } from "@/lib/products";
 
 export async function createCuttingOrder(formData: FormData) {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const { error } = await supabase.from("cutting_orders").insert({
+    vendor_id: String(formData.get("vendor_id")),
+    arrival_date: String(formData.get("arrival_date")),
+    reference: String(formData.get("reference") || "") || null,
+    status: "open",
+  });
+  if (error) return error.message;
+  revalidatePath("/cutting-orders");
+}
+
+export async function deleteCuttingOrder(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("cutting_orders").delete().eq("id", id);
+  if (error) return error.message;
+  revalidatePath("/cutting-orders");
+  return null;
+}
+
+export async function updateCuttingOrder(
+  id: string,
+  values: {
+    vendor_id: string;
+    arrival_date: string;
+    reference: string;
+    status: string;
+  },
+) {
+  const vendor_id = values.vendor_id.trim();
+  const arrival_date = values.arrival_date.trim();
+  const status = values.status.trim();
+  if (!vendor_id) return "Pick a vendor.";
+  if (!arrival_date) return "Enter an arrival date.";
+  if (!["open", "received", "cancelled"].includes(status)) return "Pick a status.";
+  const supabase = await createClient();
+  const { error } = await supabase
     .from("cutting_orders")
-    .insert({
-      vendor_id: String(formData.get("vendor_id")),
-      arrival_date: String(formData.get("arrival_date")),
-      reference: String(formData.get("reference") || "") || null,
-      notes: String(formData.get("notes") || "") || null,
-      status: "open",
+    .update({
+      vendor_id,
+      arrival_date,
+      reference: values.reference.trim() || null,
+      status,
     })
-    .select("id")
-    .single();
-  if (error || !data) throw new Error(error?.message);
-  const productIds = formData.getAll("product_id").map(String);
-  if (productIds.length) {
-    await supabase.from("cutting_order_products").insert(
-      productIds.map((product_id) => ({
-        cutting_order_id: data.id,
-        product_id,
-        status: "open",
-      })),
-    );
-  }
-  redirect(`/cutting-orders/${data.id}`);
+    .eq("id", id);
+  if (error) return error.message;
+  revalidatePath("/cutting-orders");
+  revalidatePath(`/cutting-orders/${id}`);
+  return null;
 }
 
 export async function setOrderStatus(id: string, formData: FormData) {
@@ -39,6 +63,90 @@ export async function setOrderStatus(id: string, formData: FormData) {
     .update({ status: String(formData.get("status")) })
     .eq("id", id);
   revalidatePath(`/cutting-orders/${id}`);
+}
+
+export async function addCuttingOrderProduct(orderId: string, productId: string) {
+  if (!orderId) return "Open an order first.";
+  if (!productId) return "Pick a product.";
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("cutting_order_products")
+    .select("product_id")
+    .eq("cutting_order_id", orderId)
+    .eq("product_id", productId)
+    .maybeSingle();
+  if (existing) return "Already on this order.";
+  const { error } = await supabase.from("cutting_order_products").insert({
+    cutting_order_id: orderId,
+    product_id: productId,
+    status: "open",
+  });
+  if (error) {
+    if (error.code === "23505") return "Already on this order.";
+    return error.message;
+  }
+  revalidatePath("/cutting-orders");
+  revalidatePath(`/cutting-orders/${orderId}`);
+  return null;
+}
+
+export async function saveCuttingOrderLine(
+  orderId: string,
+  productId: string,
+  status: string,
+  formData: FormData,
+) {
+  const statusMsg = await updateCuttingOrderProduct(orderId, productId, { status });
+  if (statusMsg) return statusMsg;
+  const cells = parseCellFields(formData, "ord");
+  if (!cells.length) return null;
+  const supabase = await createClient();
+  const { error } = await supabase.from("cutting_quantities").upsert(
+    cells.map((c) => ({
+      cutting_order_id: orderId,
+      product_id: productId,
+      size_id: c.size_id,
+      drop_id: c.drop_id,
+      qty_ordered: c.qty,
+    })),
+    { onConflict: "cutting_order_id,product_id,size_id,drop_id" },
+  );
+  if (error) return error.message;
+  revalidatePath("/cutting-orders");
+  revalidatePath(`/cutting-orders/${orderId}`);
+  return null;
+}
+
+export async function updateCuttingOrderProduct(
+  orderId: string,
+  productId: string,
+  values: { status: string },
+) {
+  const status = values.status.trim();
+  if (!["open", "complete"].includes(status)) return "Pick a status.";
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cutting_order_products")
+    .update({ status })
+    .eq("cutting_order_id", orderId)
+    .eq("product_id", productId);
+  if (error) return error.message;
+  revalidatePath("/cutting-orders");
+  revalidatePath(`/cutting-orders/${orderId}`);
+  return null;
+}
+
+export async function deleteCuttingOrderProduct(orderId: string, productId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cutting_order_products")
+    .delete()
+    .eq("cutting_order_id", orderId)
+    .eq("product_id", productId);
+  if (error) return error.message;
+  revalidatePath("/cutting-orders");
+  revalidatePath(`/cutting-orders/${orderId}`);
+  return null;
 }
 
 export async function setProductStatus(orderId: string, formData: FormData) {

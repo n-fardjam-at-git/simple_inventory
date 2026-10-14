@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { toSentenceCase } from "@/lib/text-case";
 
 export async function createCustomer(formData: FormData) {
   const supabase = await createClient();
@@ -10,7 +11,7 @@ export async function createCustomer(formData: FormData) {
   const { data, error } = await supabase
     .from("customers")
     .insert({
-      company_name: String(formData.get("company_name")),
+      company_name: toSentenceCase(String(formData.get("company_name") ?? "").trim()),
       account_number: sage || null,
     })
     .select("id")
@@ -25,7 +26,7 @@ export async function updateCustomer(id: string, formData: FormData) {
   await supabase
     .from("customers")
     .update({
-      company_name: String(formData.get("company_name")),
+      company_name: toSentenceCase(String(formData.get("company_name") ?? "").trim()),
       account_number: sage || null,
     })
     .eq("id", id);
@@ -37,7 +38,7 @@ export async function addAddress(customerId: string, formData: FormData) {
   await supabase.from("customer_addresses").insert({
     customer_id: customerId,
     address_type: String(formData.get("address_type")),
-    label: String(formData.get("label") || "") || null,
+    label: toSentenceCase(String(formData.get("label") || "").trim()) || null,
     address_line1: String(formData.get("address_line1")),
     city: String(formData.get("city")),
     region: String(formData.get("region")),

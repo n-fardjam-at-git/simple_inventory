@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageTitle, Card } from "@/components/ui";
+import { cuttingOrderLabel } from "@/lib/cutting-order";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -13,7 +14,7 @@ export default async function DashboardPage() {
   const units = (inventory ?? []).reduce((s, i) => s + (i.qty_on_hand ?? 0), 0);
   const { data: orders } = await supabase
     .from("cutting_orders")
-    .select("id, arrival_date, reference, status, vendors ( name )")
+    .select("id, order_num, arrival_date, status, vendors ( name )")
     .eq("status", "open")
     .order("arrival_date")
     .limit(8);
@@ -25,6 +26,9 @@ export default async function DashboardPage() {
         <Card>
           <p className="text-sm text-stone-500">Units on hand</p>
           <p className="text-2xl font-semibold">{units}</p>
+          <Link className="text-xs text-stone-600 underline" href="/inventory">
+            Open inventory
+          </Link>
         </Card>
         <Card>
           <p className="text-sm text-stone-500">Low-stock cells</p>
@@ -43,7 +47,7 @@ export default async function DashboardPage() {
             return (
               <li key={o.id} className="flex justify-between py-2 text-sm">
                 <Link className="hover:underline" href={`/cutting-orders/${o.id}`}>
-                  {o.reference ?? o.id.slice(0, 8)} · {vendor?.name}
+                  {cuttingOrderLabel(o.order_num)} · {vendor?.name}
                 </Link>
                 <span>{o.arrival_date}</span>
               </li>

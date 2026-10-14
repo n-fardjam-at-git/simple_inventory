@@ -41,14 +41,15 @@ export function canSeeNav(role: Role, href: string) {
   const warehouse = [
     "/",
     "/products",
+    "/inventory",
     "/alerts",
     "/vendors",
     "/cutting-orders",
     "/customer-shipments",
     "/customers",
   ];
-  const sales = ["/", "/products", "/alerts", "/customer-shipments", "/customers"];
-  const customer = ["/", "/products", "/alerts"];
+  const sales = ["/", "/products", "/inventory", "/alerts", "/customer-shipments", "/customers"];
+  const customer = ["/", "/products", "/inventory", "/alerts"];
   if (role === "warehouse") return warehouse.some((p) => href === p || href.startsWith(p + "/"));
   if (role === "sales_rep") return sales.some((p) => href === p || href.startsWith(p + "/"));
   return customer.some((p) => href === p || href.startsWith(p + "/"));

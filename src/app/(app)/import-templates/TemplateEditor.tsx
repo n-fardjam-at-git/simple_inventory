@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Btn } from "@/components/ui";
 import { saveTemplate } from "./actions";
 import { ADDRESS_FIELDS, CUSTOMER_FIELDS } from "@/lib/excel/parse";
+import { ComboBox } from "@/components/ComboBox";
 
 export function TemplateEditor({
   templates,
@@ -38,7 +39,7 @@ export function TemplateEditor({
   return (
     <div className="space-y-4 text-sm">
       <form action={saveTemplate} className="space-y-3">
-        <input name="name" required placeholder="Sage customers export" className="rounded border px-2 py-1" />
+        <input name="name" required aria-label="Template name" className="rounded border px-2 py-1" />
         <select
           name="target"
           value={target}
@@ -84,22 +85,17 @@ export function TemplateEditor({
                 <td className="py-1">{m.dest_field}</td>
                 <td>
                   {headers.length ? (
-                    <select
+                    <ComboBox
                       className="rounded border px-1 py-1"
+                      allowEmpty
                       value={m.source_header}
-                      onChange={(e) => {
+                      onChange={(id) => {
                         const next = [...maps];
-                        next[i] = { ...m, source_header: e.target.value };
+                        next[i] = { ...m, source_header: id };
                         setMaps(next);
                       }}
-                    >
-                      <option value="">—</option>
-                      {headers.map((h) => (
-                        <option key={h} value={h}>
-                          {h}
-                        </option>
-                      ))}
-                    </select>
+                      options={headers.map((h) => ({ id: h, label: h }))}
+                    />
                   ) : (
                     <input
                       className="rounded border px-1 py-1"
@@ -109,7 +105,7 @@ export function TemplateEditor({
                         next[i] = { ...m, source_header: e.target.value };
                         setMaps(next);
                       }}
-                      placeholder="Column header in Excel"
+                      aria-label="Excel column header"
                     />
                   )}
                 </td>

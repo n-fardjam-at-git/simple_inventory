@@ -1,21 +1,30 @@
 export function PageTitle({
   title,
   actions,
+  className = "mb-6",
 }: {
   title: string;
   actions?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className={`flex flex-wrap items-end justify-between gap-3 ${className}`}>
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
       {actions}
     </div>
   );
 }
 
-export function Card({ children }: { children: React.ReactNode }) {
+export function Card({
+  children,
+  className = "",
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+    <div
+      className={`rounded-lg border border-stone-200 bg-white p-4 shadow-sm ${className}`}
+      {...props}
+    >
       {children}
     </div>
   );

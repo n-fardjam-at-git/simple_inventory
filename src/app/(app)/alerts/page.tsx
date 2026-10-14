@@ -31,8 +31,6 @@ export default async function AlertsPage() {
       ) : null}
       <div className="space-y-6">
         {matrices.map((m) => {
-          const lot = m.product?.lots as unknown as { lot_no: string };
-          const model = m.product?.models as unknown as { name: string };
           const lowCells = m.cells.map((c) => ({
             ...c,
             qty: c.qty,
@@ -40,7 +38,7 @@ export default async function AlertsPage() {
           return (
             <Card key={m.product?.id}>
               <Link className="mb-2 block font-medium underline" href={`/products/${m.product?.id}`}>
-                {lot?.lot_no} · {model?.name}
+                {m.product?.name}
               </Link>
               <QtyMatrix sizes={m.sizes} drops={m.drops} cells={lowCells} />
             </Card>

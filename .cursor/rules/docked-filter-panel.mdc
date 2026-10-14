@@ -1,0 +1,37 @@
+---
+description: Docked Filter Panel — left slide-over filter for a paged Fit List. Apply when the user says docked-filter-panel, docked filter, or asks to reuse the lots filter window.
+alwaysApply: false
+---
+
+# Docked Filter Panel
+
+Reference: lots page `src/app/(app)/lots/LotsWorkspace.tsx` (opens from **Filter** next to the page title).
+
+When the user says **docked-filter-panel** (or docked filter), reuse this instead of a modal, dropdown, or inline filter bar.
+
+## Chrome
+
+- Starts **closed**. A page-title **Filter** button opens it.
+- **Docked left**, width **30%**, slides over the list (does not shrink the table).
+- Top edge is **below the white header + nav**, in the light gray (`bg-stone-50`) content area. Header stays visible.
+- Overlay is **transparent** (click it to close). Panel has a **drop shadow** onto the page.
+- Close with ×, overlay click, or Escape.
+- Panel canvas matches the page: `bg-stone-50` padding, inner **Card** (`rounded-lg border border-stone-200 bg-white shadow-sm`), same headings and field chrome as the rest of the page.
+- Footer: **Filter** (`Btn`) applies and **keeps the panel open**; **Reset** clears fields and the applied filter.
+
+## Apply state
+
+- Empty fields are ignored; filled fields combine with **AND**.
+- Catalog fields use **Combo Box**. Text fields match contains (case-insensitive).
+- Each editable control has an inner **×** on the right to clear that field only.
+- While a filter is applied, the page button label is **Filtered** with a **semi-transparent red** background. Reset restores **Filter** and the normal white button.
+
+## Fit List
+
+- Filter the rows passed into the paged Fit List. Jump/select a row with Fit List `focusId` / `focusNonce` (tryLeave if a row is dirty in edit).
+- Optional **Find** (←, `title="Find"`) inside a key field: if that record is in the **current filtered** list, page to it, select it, and **close** the panel. No match → panel stays open.
+
+## Lots extras (this page only)
+
+- Lot No filled → Article and Color # are **watermarks** (not inputs), parsed from the lot.
+- Find matches **exact** lot number (case-insensitive) in the filtered list.

@@ -1,0 +1,30 @@
+---
+description: Fit List — reusable selectable list with single-row edit, dirty leave prompt, bordered rows, boxed actions. Apply when the user says Fit List or asks to reuse inventory/products list editing.
+alwaysApply: false
+---
+
+# Fit List
+
+Shared UI in `src/components/list/ListTable.tsx` (`ListTable`, `SelectableRow`, `RowButtons`, `useList`, `useListRow`). Styles in `src/app/globals.css` (`.list-table`).
+
+## Format
+
+- One selected row at a time (click row to select; zebra + teal selected).
+- Each data row is a **full border box** (not a shared underline). First cell indented.
+- Action buttons live in a **rounded bordered chip** in the **last column**.
+- Links such as **Settings** (merchandise → products setting page) sit in the column **before** the action chip. If Settings is opened from a row in **edit**, closing settings returns to `/products?edit=<id>` so that same row is selected and still in edit.
+
+## Editing
+
+- Only **one row** in edit mode.
+- In edit: **Cancel** always; **Save** only if dirty; **Edit** when not editing. **Delete** optional.
+- Click another row while **clean** → leave edit and select (or start edit if they clicked Edit).
+- Click away while **dirty** → modal **Save** or **Cancel** (discard), then navigate.
+- `tryLeave(fn)` for pagination or other navigation with the same prompt.
+
+## Variants
+
+- **Paged Fit List**: show as many full rows as fit; **Previous** / **Next**; optional outer **rounded bordered container**.
+- Catalog pages with an **Add** row (`FitPage`): the list stretches in the leftover space so the add fields stay on screen (no page scroll to find Add). Inventory has no add row and fills the viewport.
+
+Reuse this instead of inventing a new table/edit interaction.

@@ -28,14 +28,10 @@ export default async function ReceivePage({
       <PageTitle title="Cutting shipment" />
       <form action={postReceive.bind(null, id)} className="space-y-6">
         {matrices.map((m) => {
-          const lot = m.product?.lots as unknown as { lot_no: string };
-          const model = m.product?.models as unknown as { name: string };
           const empty = m.cells.map((c) => ({ ...c, qty: 0 }));
           return (
             <Card key={m.product?.id}>
-              <h2 className="mb-2 font-medium">
-                {lot?.lot_no} · {model?.name}
-              </h2>
+              <h2 className="mb-2 font-medium">{m.product?.name}</h2>
               <QtyMatrix
                 sizes={m.sizes}
                 drops={m.drops}

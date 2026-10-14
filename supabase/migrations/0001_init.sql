@@ -3,50 +3,6 @@
 create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------------------
--- Helpers
--- ---------------------------------------------------------------------------
-
-create or replace function public.current_role()
-returns text
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select role from public.profiles where id = auth.uid();
-$$;
-
-create or replace function public.is_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(public.current_role() = 'admin', false);
-$$;
-
-create or replace function public.is_staff()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(public.current_role() in ('admin', 'warehouse', 'sales_rep'), false);
-$$;
-
-create or replace function public.is_warehouse()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(public.current_role() in ('admin', 'warehouse'), false);
-$$;
-
--- ---------------------------------------------------------------------------
 -- Company
 -- ---------------------------------------------------------------------------
 
@@ -88,6 +44,46 @@ create table public.profiles (
   role text not null check (role in ('admin', 'warehouse', 'sales_rep', 'customer')),
   display_name text not null default ''
 );
+
+create or replace function public.current_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role from public.profiles where id = auth.uid();
+$$;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(public.current_role() = 'admin', false);
+$$;
+
+create or replace function public.is_staff()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(public.current_role() in ('admin', 'warehouse', 'sales_rep'), false);
+$$;
+
+create or replace function public.is_warehouse()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(public.current_role() in ('admin', 'warehouse'), false);
+$$;
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -140,21 +136,41 @@ create table public.size_chart_drops (
 
 create table public.brands (
   id uuid primary key default gen_random_uuid(),
-  name text not null unique
+  name text not null unique,
+  is_active boolean not null default true
+);
+
+create table public.colors (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  is_active boolean not null default true
+);
+
+create table public.patterns (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  is_active boolean not null default true
+);
+
+create table public.contents (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  is_active boolean not null default true
 );
 
 create table public.items (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
-  default_size_chart_id uuid references public.size_charts(id)
+  default_size_chart_id uuid references public.size_charts(id),
+  is_active boolean not null default true
 );
 
 create table public.models (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   item_id uuid not null references public.items(id),
-  brand_id uuid references public.brands(id),
   size_chart_id uuid not null references public.size_charts(id),
+  is_active boolean not null default true,
   unique (item_id, name)
 );
 
@@ -164,18 +180,133 @@ create table public.lots (
   article text,
   color_num text,
   brand_id uuid references public.brands(id),
+  color_id uuid references public.colors(id),
+  pattern_id uuid references public.patterns(id),
+  content_id uuid references public.contents(id),
+  is_active boolean not null default true,
   unique (brand_id, lot_no)
+);
+
+create table public.seasons (
+  id uuid primary key default gen_random_uuid(),
+  year int not null,
+  start_season smallint not null check (start_season in (1, 2, 3, 4)),
+  is_combo boolean not null default false,
+  season text generated always as (
+    case
+      when is_combo and start_season = 1 then 'Spring/Summer ' || year::text
+      when is_combo and start_season = 3 then 'Fall/Winter ' || year::text
+      when start_season = 1 then 'Spring ' || year::text
+      when start_season = 2 then 'Summer ' || year::text
+      when start_season = 3 then 'Fall ' || year::text
+      when start_season = 4 then 'Winter ' || year::text
+      else null
+    end
+  ) stored,
+  check (not is_combo or start_season in (1, 3)),
+  unique (year, start_season, is_combo),
+  unique (season)
 );
 
 create table public.products (
   id uuid primary key default gen_random_uuid(),
-  lot_id uuid not null references public.lots(id),
-  model_id uuid not null references public.models(id),
-  size_chart_id uuid not null references public.size_charts(id),
+  type smallint not null default 1 check (type in (1, 2, 3)),
+  name text,
+  lot_id uuid references public.lots(id) on delete restrict,
+  model_id uuid references public.models(id) on delete restrict,
+  size_chart_id uuid references public.size_charts(id) on delete restrict,
   standard_price numeric(12,2) not null default 0,
+  price_stage smallint not null default 1 check (price_stage in (1, 2, 3)),
+  availability text,
   published boolean not null default true,
-  unique (lot_id, model_id)
+  is_active boolean not null default true,
+  unique (lot_id, model_id),
+  check (
+    (type = 1 and lot_id is not null and model_id is not null and size_chart_id is not null)
+    or (type in (2, 3) and name is not null and length(btrim(name)) > 0)
+  )
 );
+
+create unique index products_one_freight on public.products (type) where type = 3;
+
+create or replace function public.compute_merchandise_product_name(p_lot_id uuid, p_model_id uuid)
+returns text
+language sql
+stable
+as $$
+  select case
+    when upper(btrim(coalesce(l.article, ''))) = upper(btrim(m.name)) then l.lot_no
+    else l.lot_no || '>' || m.name
+  end
+  from public.lots l
+  join public.models m on m.id = p_model_id
+  where l.id = p_lot_id
+$$;
+
+create or replace function public.products_assign_merchandise_name()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.type = 1 then
+    new.name := public.compute_merchandise_product_name(new.lot_id, new.model_id);
+  else
+    new.name := nullif(btrim(coalesce(new.name, '')), '');
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists products_assign_merchandise_name on public.products;
+create trigger products_assign_merchandise_name
+  before insert or update of type, lot_id, model_id, name
+  on public.products
+  for each row execute function public.products_assign_merchandise_name();
+
+create or replace function public.products_refresh_names_from_lot()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.products
+  set lot_id = lot_id
+  where type = 1 and lot_id = new.id;
+  return new;
+end;
+$$;
+
+drop trigger if exists lots_refresh_product_names on public.lots;
+create trigger lots_refresh_product_names
+  after update of lot_no, article
+  on public.lots
+  for each row execute function public.products_refresh_names_from_lot();
+
+create or replace function public.products_refresh_names_from_model()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.products
+  set model_id = model_id
+  where type = 1 and model_id = new.id;
+  return new;
+end;
+$$;
+
+drop trigger if exists models_refresh_product_names on public.models;
+create trigger models_refresh_product_names
+  after update of name
+  on public.models
+  for each row execute function public.products_refresh_names_from_model();
+
+alter table public.products alter column name set not null;
+create unique index if not exists products_name_key on public.products (name);
 
 create table public.product_sizes (
   product_id uuid not null references public.products(id) on delete cascade,
@@ -239,7 +370,8 @@ create table public.customers (
   company_name text not null,
   account_number text,
   user_id uuid references public.profiles(id),
-  sales_rep_id uuid references public.profiles(id)
+  sales_rep_id uuid references public.profiles(id),
+  is_active boolean not null default true
 );
 
 create unique index customers_sage_account_unique
@@ -273,7 +405,8 @@ create table public.import_templates (
 create table public.vendors (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  notes text
+  notes text,
+  is_active boolean not null default true
 );
 
 create table public.cutting_orders (
@@ -331,7 +464,8 @@ create table public.customer_shipments (
 create table public.customer_shipment_products (
   id uuid primary key default gen_random_uuid(),
   customer_shipment_id uuid not null references public.customer_shipments(id) on delete cascade,
-  product_id uuid not null references public.products(id)
+  product_id uuid not null references public.products(id),
+  qty int not null default 0
 );
 
 create table public.customer_shipment_cells (
@@ -488,9 +622,13 @@ alter table public.size_charts enable row level security;
 alter table public.size_chart_sizes enable row level security;
 alter table public.size_chart_drops enable row level security;
 alter table public.brands enable row level security;
+alter table public.colors enable row level security;
+alter table public.patterns enable row level security;
+alter table public.contents enable row level security;
 alter table public.items enable row level security;
 alter table public.models enable row level security;
 alter table public.lots enable row level security;
+alter table public.seasons enable row level security;
 alter table public.products enable row level security;
 alter table public.product_sizes enable row level security;
 alter table public.product_drops enable row level security;
@@ -530,12 +668,20 @@ create policy admin_write_drops on public.size_chart_drops for all to authentica
 
 create policy read_brands on public.brands for select to authenticated using (true);
 create policy write_brands on public.brands for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy read_colors on public.colors for select to authenticated using (true);
+create policy write_colors on public.colors for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy read_patterns on public.patterns for select to authenticated using (true);
+create policy write_patterns on public.patterns for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy read_contents on public.contents for select to authenticated using (true);
+create policy write_contents on public.contents for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy read_items on public.items for select to authenticated using (true);
 create policy write_items on public.items for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy read_models on public.models for select to authenticated using (true);
 create policy write_models on public.models for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy read_lots on public.lots for select to authenticated using (true);
 create policy write_lots on public.lots for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy read_seasons on public.seasons for select to authenticated using (true);
+create policy write_seasons on public.seasons for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 create policy read_products on public.products for select to authenticated
   using (public.is_staff() or published = true);

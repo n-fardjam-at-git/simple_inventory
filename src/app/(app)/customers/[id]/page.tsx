@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/auth";
 import { PageTitle, Card, Btn } from "@/components/ui";
+import { AddForm } from "@/components/AddForm";
 import { updateCustomer, addAddress } from "../actions";
+import { CasedInput } from "@/components/CasedInput";
 
 export default async function CustomerDetail({
   params,
@@ -24,7 +26,7 @@ export default async function CustomerDetail({
         <form action={updateCustomer.bind(null, id)} className="flex flex-wrap gap-2 text-sm">
           <label>
             Name
-            <input
+            <CasedInput
               name="company_name"
               defaultValue={customer?.company_name}
               className="ml-1 rounded border px-2 py-1"
@@ -50,20 +52,20 @@ export default async function CustomerDetail({
             </li>
           ))}
         </ul>
-        <form action={addAddress.bind(null, id)} className="flex flex-wrap gap-2 text-sm">
+        <AddForm action={addAddress.bind(null, id)} className="flex flex-wrap gap-2 text-sm">
           <select name="address_type" className="rounded border px-2 py-1">
             <option value="shipping">shipping</option>
             <option value="billing">billing</option>
             <option value="both">both</option>
           </select>
-          <input name="label" placeholder="Label" className="rounded border px-2 py-1" />
-          <input name="address_line1" placeholder="Street" className="rounded border px-2 py-1" />
-          <input name="city" placeholder="City" className="rounded border px-2 py-1" />
-          <input name="region" placeholder="Region" className="rounded border px-2 py-1" />
-          <input name="postal_code" placeholder="Postal" className="rounded border px-2 py-1" />
-          <input name="country" placeholder="Country" className="rounded border px-2 py-1" />
+          <input name="label" aria-label="Label" className="rounded border px-2 py-1" />
+          <input name="address_line1" aria-label="Street" className="rounded border px-2 py-1" />
+          <input name="city" aria-label="City" className="rounded border px-2 py-1" />
+          <input name="region" aria-label="Region" className="rounded border px-2 py-1" />
+          <input name="postal_code" aria-label="Postal" className="rounded border px-2 py-1" />
+          <input name="country" aria-label="Country" className="rounded border px-2 py-1" />
           <Btn type="submit">Add address</Btn>
-        </form>
+        </AddForm>
       </Card>
     </div>
   );

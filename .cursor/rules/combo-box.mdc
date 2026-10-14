@@ -1,0 +1,30 @@
+---
+description: Combo Box — native type-to-filter catalog picker (input + datalist). Apply when the user says Combo Box, combo, or asks to reuse the catalog picker.
+alwaysApply: false
+---
+
+# Combo Box
+
+Shared UI in `src/components/ComboBox.tsx`. Native `<input list>` + `<datalist>`: type to filter, pick a suggestion. Not a `<select>`.
+
+When the user says **Combo Box**, use this component. Do not invent another autocomplete.
+
+## Behavior
+
+- Options are `{ id, label }`. The visible field shows **label**; a hidden `name` input submits **id**.
+- Match exact label, then case-insensitive. Empty is allowed only if `allowEmpty` or not `required`.
+- Unknown typed text is **invalid while shown** (`setCustomValidity`, blocks native submit and Fit List Save). On blur it **reverts** to the last list value (or empty). Do not persist free-typed values that are not on the list.
+- **`allowAny`**: typed text need not be on the list (filter name). Still offers datalist suggestions. Catalog pickers must not set `allowAny`.
+- Filter dependent lists in the parent (e.g. ship-to by customer). Remount with `key` when the parent id changes.
+
+## Use Combo Box for catalogs
+
+Lot, model, item, size chart, brand, collection, color, pattern, content, vendor, customer, ship-to, product, import template/sheet/source header, availability **season**.
+
+Instock stays a checkbox, not a Combo Box option.
+
+## Keep `<select>` for short closed lists
+
+Charge type, season period, address type, cutting/shipment status, contact kind, import template target.
+
+Reuse this instead of a searchable custom dropdown or a long `<select>` of catalog rows.

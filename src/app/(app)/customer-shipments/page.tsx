@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/auth";
-import { PageTitle, Card, Btn } from "@/components/ui";
-import { createShipment } from "./actions";
+import { PageTitle, Card } from "@/components/ui";
+import { NewShipmentForm } from "./NewShipmentForm";
 
 export default async function CustomerShipmentsPage() {
   await requireRoles(["admin", "warehouse", "sales_rep"]);
@@ -13,7 +13,8 @@ export default async function CustomerShipmentsPage() {
     .order("shipping_date", { ascending: false });
   const { data: customers } = await supabase
     .from("customers")
-    .select("id, company_name, account_number");
+    .select("id, company_name, account_number")
+    .eq("is_active", true);
   const { data: addresses } = await supabase
     .from("customer_addresses")
     .select("id, customer_id, address_type, label, city")
@@ -56,25 +57,7 @@ export default async function CustomerShipmentsPage() {
       </Card>
       <Card>
         <h2 className="mb-2 font-medium">New shipment</h2>
-        <form action={createShipment} className="flex flex-wrap gap-2 text-sm">
-          <select name="customer_id" required className="rounded border px-2 py-1">
-            {(customers ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.company_name} {c.account_number ? `(${c.account_number})` : ""}
-              </option>
-            ))}
-          </select>
-          <select name="customer_address_id" className="rounded border px-2 py-1">
-            <option value="">Ship-to (optional)</option>
-            {(addresses ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label ?? a.address_type} · {a.city}
-              </option>
-            ))}
-          </select>
-          <input name="shipping_date" type="date" required className="rounded border px-2 py-1" />
-          <Btn type="submit">Create</Btn>
-        </form>
+        <NewShipmentForm customers={customers ?? []} addresses={addresses ?? []} />
         <p className="mt-2 text-xs text-stone-500">
           Only shipping / both addresses appear. Pick an address that belongs to the
           selected customer.

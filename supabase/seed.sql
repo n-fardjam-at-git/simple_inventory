@@ -20,9 +20,9 @@ insert into public.company_contacts (company_profile_id, kind, label, value, sor
   ('00000000-0000-0000-0000-000000000001', 'website', 'Site', 'https://gruppobravo.example', 1, true);
 
 insert into public.size_charts (id, name) values
-  ('11111111-1111-1111-1111-111111111111', 'US Jacket'),
-  ('22222222-2222-2222-2222-222222222222', 'US Dress Shirt'),
-  ('33333333-3333-3333-3333-333333333333', 'US Trouser')
+  ('11111111-1111-1111-1111-111111111111', 'Us jacket'),
+  ('22222222-2222-2222-2222-222222222222', 'Us dress shirt'),
+  ('33333333-3333-3333-3333-333333333333', 'Us trouser')
 on conflict do nothing;
 
 insert into public.size_chart_sizes (id, chart_id, code, sort_order) values
@@ -57,8 +57,8 @@ insert into public.size_chart_drops (id, chart_id, code, sort_order) values
 on conflict do nothing;
 
 insert into public.brands (id, name) values
-  ('b0000000-0000-0000-0000-000000000001', 'Bravo Uomo'),
-  ('b0000000-0000-0000-0000-000000000002', 'Harbor & Co')
+  ('b0000000-0000-0000-0000-000000000001', 'BRAVO UOMO'),
+  ('b0000000-0000-0000-0000-000000000002', 'HARBOR & CO')
 on conflict do nothing;
 
 insert into public.items (id, name, default_size_chart_id) values
@@ -67,10 +67,10 @@ insert into public.items (id, name, default_size_chart_id) values
   ('i0000000-0000-0000-0000-000000000003', 'Pants', '33333333-3333-3333-3333-333333333333')
 on conflict do nothing;
 
-insert into public.models (id, name, item_id, brand_id, size_chart_id) values
-  ('m0000000-0000-0000-0000-000000000001', 'TB-2B-Peak', 'i0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111'),
-  ('m0000000-0000-0000-0000-000000000002', 'Dress Shirt Classic', 'i0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222'),
-  ('m0000000-0000-0000-0000-000000000003', 'Flat Front', 'i0000000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333')
+insert into public.models (id, name, item_id, size_chart_id) values
+  ('m0000000-0000-0000-0000-000000000001', 'TB-2B-PEAK', 'i0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111'),
+  ('m0000000-0000-0000-0000-000000000002', 'DRESS SHIRT CLASSIC', 'i0000000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222'),
+  ('m0000000-0000-0000-0000-000000000003', 'FLAT FRONT', 'i0000000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333')
 on conflict do nothing;
 
 insert into public.lots (id, lot_no, article, color_num, brand_id) values
@@ -147,7 +147,7 @@ where s.chart_id = '11111111-1111-1111-1111-111111111111'
 on conflict do nothing;
 
 insert into public.vendors (id, name, notes) values
-  ('v0000000-0000-0000-0000-000000000001', 'Milano Mills', 'Jacket mill')
+  ('v0000000-0000-0000-0000-000000000001', 'Milano mills', 'Jacket mill')
 on conflict do nothing;
 
 insert into public.cutting_orders (id, vendor_id, arrival_date, reference, status, notes) values
@@ -160,8 +160,8 @@ insert into public.cutting_order_products (cutting_order_id, product_id, status)
 on conflict do nothing;
 
 insert into public.customers (id, company_name, account_number) values
-  ('u0000000-0000-0000-0000-000000000001', 'Metro Menswear', 'SAGE-4410'),
-  ('u0000000-0000-0000-0000-000000000002', 'Coast Formal', null)
+  ('u0000000-0000-0000-0000-000000000001', 'Metro menswear', 'SAGE-4410'),
+  ('u0000000-0000-0000-0000-000000000002', 'Coast formal', null)
 on conflict do nothing;
 
 insert into public.customer_addresses (id, customer_id, address_type, label, address_line1, city, region, postal_code, country) values

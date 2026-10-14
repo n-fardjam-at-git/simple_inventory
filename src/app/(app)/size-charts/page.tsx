@@ -1,7 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/auth";
-import { PageTitle, Card, Btn } from "@/components/ui";
-import { addChart, addSize, addDrop } from "./actions";
+import { PageTitle, Btn } from "@/components/ui";
+import { addChart } from "./actions";
+import { SizeChartsTable } from "./SizeChartsTable";
+import { SizeListInput } from "./SizeListInput";
+import { CasedInput } from "@/components/CasedInput";
+import { FitPage } from "@/components/list/FitList";
+import { AddForm } from "@/components/AddForm";
 
 export default async function SizeChartsPage() {
   await requireRoles(["admin"]);
@@ -16,46 +21,45 @@ export default async function SizeChartsPage() {
     .select("id, chart_id, code, sort_order")
     .order("sort_order");
 
+  const rows = (charts ?? []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    sizes: (sizes ?? [])
+      .filter((s) => s.chart_id === c.id)
+      .map((s) => s.code)
+      .join(", "),
+    drops: (drops ?? [])
+      .filter((d) => d.chart_id === c.id && d.code.trim())
+      .map((d) => d.code)
+      .join(", "),
+  }));
+
   return (
     <div>
       <PageTitle title="Size charts" />
-      <Card>
-        <form action={addChart} className="mb-6 flex gap-2 text-sm">
-          <input name="name" required placeholder="US Jacket" className="rounded border px-2 py-1" />
-          <Btn type="submit">Add chart</Btn>
-        </form>
-        {(charts ?? []).map((c) => (
-          <div key={c.id} className="mb-6 border-t border-stone-100 pt-4">
-            <h2 className="mb-2 font-medium">{c.name}</h2>
-            <p className="text-xs text-stone-500">
-              Sizes (columns, small → large):{" "}
-              {(sizes ?? [])
-                .filter((s) => s.chart_id === c.id)
-                .map((s) => s.code)
-                .join(", ")}
-            </p>
-            <p className="mb-2 text-xs text-stone-500">
-              Drops (rows):{" "}
-              {(drops ?? [])
-                .filter((d) => d.chart_id === c.id)
-                .map((d) => d.code)
-                .join(", ")}
-            </p>
-            <form action={addSize} className="mb-2 flex gap-2 text-sm">
-              <input type="hidden" name="chart_id" value={c.id} />
-              <input name="code" placeholder="42" className="w-20 rounded border px-2 py-1" />
-              <input name="sort_order" type="number" placeholder="order" className="w-20 rounded border px-2 py-1" />
-              <Btn type="submit">Add size</Btn>
-            </form>
-            <form action={addDrop} className="flex gap-2 text-sm">
-              <input type="hidden" name="chart_id" value={c.id} />
-              <input name="code" placeholder="Regular" className="w-28 rounded border px-2 py-1" />
-              <input name="sort_order" type="number" placeholder="order" className="w-20 rounded border px-2 py-1" />
-              <Btn type="submit">Add drop</Btn>
-            </form>
-          </div>
-        ))}
-      </Card>
+      <p className="mb-4 text-sm text-stone-600">
+        Enter sizes and drops as comma-separated lists. Order is the list position
+        (first = smallest / first row). Example sizes: <code>36, 38, 40, 42</code>{" "}
+        · drops: <code>S, R, L</code>. Leave drops blank if the chart has no length
+        or drop — the matrix shows sizes only.
+      </p>
+      <FitPage>
+      {rows.length === 0 ? (
+        <p className="min-h-0 flex-1 text-sm text-stone-500">No size charts yet.</p>
+      ) : (
+        <SizeChartsTable rows={rows} />
+      )}
+      <AddForm action={addChart} className="flex shrink-0 flex-wrap items-end gap-2 text-sm">
+        <CasedInput name="name" required aria-label="Chart name" placeholder="Chart name" className="rounded border px-2 py-1" />
+        <SizeListInput
+          name="sizes"
+          placeholder="Sizes"
+          className="w-[36rem] max-w-full rounded border px-2 py-1 font-mono"
+        />
+        <input name="drops" aria-label="Drops" placeholder="Drops" className="min-w-48 rounded border px-2 py-1 font-mono" />
+        <Btn type="submit">Add</Btn>
+      </AddForm>
+      </FitPage>
     </div>
   );
 }

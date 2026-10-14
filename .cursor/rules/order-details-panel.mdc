@@ -1,0 +1,26 @@
+---
+description: Order Details Panel — right slide-over for a cutting order. Apply when the user says order-details-panel or asks to reuse the cutting-order Open panel.
+alwaysApply: false
+---
+
+# Order Details Panel
+
+Reference: `src/app/(app)/cutting-orders/OrderDetailsPanel.tsx` (opens from **Open** on a cutting-orders Fit List row).
+
+When the user says **order-details-panel**, reuse this instead of a modal, a new page, or the left docked-filter-panel.
+
+## Chrome
+
+- Starts **closed**. Each cutting-order row has **Open** in the column **before** the action chip.
+- If the row is dirty in edit, Fit List `tryLeave` runs first, then the panel opens.
+- **Docked right**, width **70%**, slides over the list (does not shrink the table).
+- Top edge is **below the white header + nav**, in the light gray (`bg-stone-50`) content area. Header stays visible.
+- Overlay is **transparent** (click it to close). Panel has a **drop shadow** onto the page (from the left edge of the panel).
+- Close with ×, overlay click, or Escape.
+- Panel canvas matches the page: `bg-stone-50` padding, inner **Card**, same headings and field chrome as the rest of the page.
+- Title is the serial **order_num** (number only).
+- Top of the panel: a horizontal **button-list** of items with `in_set = true`, each labeled with `item.name`.
+- Press an item button → small popup **under that button** (button filled while open). Combo Box of **active** merchandise products whose model `item_id` matches the button. Label is `products.name` when set, else lot>model title. **Add** inserts `cutting_order_products` (status open) and closes; duplicate → “Already on this order.” **Cancel** or Escape closes the popup only (Escape does not close the docked panel).
+- Below that: a **Fit List** of `cutting_order_products` for the open order. Each row is inventory-style: product + status on the left, compact **size/drop** `QtyMatrix` of `qty_ordered` (totals, zeros blank). **No Add** row. Edit/Save/Cancel/Delete on the line; Save upserts `cutting_quantities.qty_ordered` and does not change `qty_received`.
+
+Shared slide-over chrome lives in `src/components/filter/DockedPanel.tsx`. Do not reuse **docked-filter-panel** (left 30%, Filter/Reset) for order details.

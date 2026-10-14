@@ -45,6 +45,9 @@ export default function LoginPage() {
           </p>
         ) : null}
         {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
+        <p className="mb-3 text-xs text-stone-500">
+          Use the user from Authentication → Users, not your Cursor password.
+        </p>
         <label className="mb-3 block text-sm">
           Email
           <input
