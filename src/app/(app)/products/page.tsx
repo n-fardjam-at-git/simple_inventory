@@ -13,7 +13,7 @@ export default async function ProductsPage({
   const { data } = await supabase
     .from("products")
     .select(
-      "id, type, name, standard_price, price_stage, availability, published, is_active, collection_id, collections ( name ), lots ( lot_no, brand_id, color_id, pattern_id, content_id, brands ( name ), colors ( name ), patterns ( name ), contents ( name ) ), models ( id, name, item_id, items ( name ) )",
+      "id, type, name, standard_price, price_stage, availability, published, is_active, collection_id, size_chart_id, collections ( name ), lots ( lot_no, brand_id, color_id, pattern_id, content_id, brands ( name ), colors ( name ), patterns ( name ), contents ( name ) ), models ( id, name, item_id, items ( name ) )",
     )
     .eq("type", 1)
     .order("name");
@@ -40,6 +40,7 @@ export default async function ProductsPage({
     availability: (p.availability as string | null) ?? null,
     is_active: p.is_active,
     collection_id: (p.collection_id as string | null) ?? null,
+    size_chart_id: (p.size_chart_id as string | null) ?? null,
     collections: (() => {
       const c = Array.isArray(p.collections) ? p.collections[0] : p.collections;
       return (c as { name: string } | null) ?? null;
@@ -73,6 +74,10 @@ export default async function ProductsPage({
     })(),
   }));
 
+  const { data: templateRows } = await supabase
+    .from("product_templates")
+    .select("id, name, brand_id, item_id, size_chart_id")
+    .order("name");
   const { edit } = await searchParams;
   const canEdit = profile.role === "admin";
 
@@ -89,6 +94,7 @@ export default async function ProductsPage({
       patterns={patterns ?? []}
       contents={contents ?? []}
       resumeId={edit || null}
+      templates={templateRows ?? []}
     />
   );
 }

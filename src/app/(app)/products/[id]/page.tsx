@@ -1,3 +1,4 @@
+import { DismissNote } from "@/components/DismissNote";
 import { loadProductMatrix } from "@/lib/products";
 import { PageTitle } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
@@ -54,9 +55,9 @@ export default async function ProductSettingsPage({
   const admin = profile.role === "admin";
   const banner =
     notice === "exists" ? (
-      <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+      <DismissNote className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
         This lot and model already exist as a product. You were opened here instead of creating a duplicate.
-      </p>
+      </DismissNote>
     ) : null;
   const priceText = `$${Number(product.standard_price).toFixed(2)}`;
   const meta = (

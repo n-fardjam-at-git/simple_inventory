@@ -1,0 +1,20 @@
+---
+description: Working… — float beside the button that is writing to the database, and ignore another click until the write finishes.
+alwaysApply: true
+---
+
+# Working…
+
+When a button writes to the database, float **Working…** beside that button until the write finishes.
+
+- The button label stays. Do not replace the label with Working….
+- Ignore another click on that button until the write finishes.
+- List-row **Save** and **Delete** (`RowButtons`): float to the **left** of the link.
+- Left-aligned buttons (**Add lot**, **Add**, **Create**, and other `Btn` submits): float to the **right**, in the open space beside the button.
+- Set the busy flag **before** `startTransition`. A flag set inside `start()` does not paint until the transition ends.
+- A React form `action` that returns a promise is enough for `Btn` (`useFormStatus`). If the action calls `start()` and returns immediately, pass `busy={pending}` as well.
+- One indicator only. Do not also print Working… under the row or the product name.
+- Do not show it on **Filter**, **Reset**, **Cancel**, **Open**, print, or a button that only opens a panel or popup.
+- **Sign out** leaves the page. Leave it without Working….
+
+`WorkingBeside` and `Busy` live in `src/components/WorkingBeside.tsx`. `Btn` (`src/components/ui.tsx`) shows it for a submit inside a form action. `RowButtons` uses `saving` and `deleting`.

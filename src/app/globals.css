@@ -49,3 +49,162 @@ body {
   padding-top: 0.35rem;
   padding-bottom: 0.35rem;
 }
+
+.list-table > tbody > tr.list-group > th {
+  border: 1px solid #a8a29e;
+  background-color: #d6d3d1;
+  padding: 0.5rem 1.25rem;
+  font-weight: 500;
+  text-align: left;
+}
+
+.list-table > tbody > tr.list-group-foot > th {
+  border-color: #a8a29e;
+  background-color: #a8a29e;
+  color: #fafaf9;
+  font-weight: 400;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.25rem 1.25rem;
+}
+
+@media print {
+  @page {
+    size: 8.5in 11in;
+    margin: 0.5in;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .print-report {
+    color: #1c1917;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-lot {
+    break-after: auto;
+    break-inside: auto;
+  }
+
+  .print-lot-cont > thead {
+    display: table-header-group;
+  }
+
+  .print-lot-cont > tbody {
+    display: table-row-group;
+  }
+
+  /* Hide the thin lot line under the group header on the first page of the group.
+     On later pages thead repeats at the top, so the line shows above the model. */
+  .print-lot-head {
+    position: relative;
+    z-index: 2;
+  }
+
+  .print-lot-cont {
+    margin-top: -1.4rem;
+  }
+
+  .print-lot-cont-head {
+    height: 1.4rem;
+    padding-top: 0.15rem;
+    padding-bottom: 0.15rem;
+    vertical-align: middle;
+    background: #fff;
+  }
+
+  .print-lot-cont > tbody > tr:first-child > td {
+    padding-top: 1.5rem;
+  }
+
+}
+
+.print-report {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.print-lot-head {
+  background: #e7e5e4;
+}
+
+.print-matrix-head {
+  background: #e7e5e4;
+}
+
+.print-sheet {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.print-sheet > thead {
+  display: table-header-group;
+}
+
+.print-sheet > thead > tr > td,
+.print-sheet > tbody > tr > td {
+  padding: 0;
+  border: 0;
+  vertical-align: top;
+}
+
+.print-page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 2px solid #1c1917;
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.print-page-n {
+  min-width: 4.5rem;
+  text-align: right;
+}
+
+.print-report {
+  width: 100%;
+}
+
+@media screen {
+  .print-lot-cont > thead {
+    display: none;
+  }
+}
+
+.print-report-tight .print-page-head {
+  padding-bottom: 0.2rem;
+  margin-bottom: 0.25rem;
+}
+
+@media print {
+  .print-summary {
+    break-before: page;
+  }
+
+  .print-report-tight .print-lot-cont {
+    margin-top: -1.1rem;
+  }
+
+  .print-report-tight .print-lot-cont-head {
+    height: 1.1rem;
+  }
+
+  .print-report-tight .print-lot-cont > tbody > tr:first-child > td {
+    padding-top: 0.25rem;
+  }
+
+  .print-report-tight .print-lot-quiet {
+    margin-top: 0;
+  }
+
+  .print-report-tight .print-lot-quiet .print-lot-cont-head {
+    height: 0;
+    padding: 0;
+  }
+}

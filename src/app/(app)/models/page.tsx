@@ -5,6 +5,7 @@ import { addModel } from "../models-actions";
 import { ModelsTable } from "./ModelsTable";
 import { CasedInput } from "@/components/CasedInput";
 import { ComboBox } from "@/components/ComboBox";
+import { NumericInput } from "@/components/NumericInput";
 import { FitPage } from "@/components/list/FitList";
 import { AddForm } from "@/components/AddForm";
 
@@ -13,7 +14,7 @@ export default async function ModelsPage() {
   const supabase = await createClient();
   const { data: models } = await supabase
     .from("models")
-    .select("id, name, is_active, item_id, size_chart_id, items ( name ), size_charts ( name )")
+    .select("id, name, is_active, item_id, size_chart_id, average_consumption, items ( name ), size_charts ( name )")
     .order("name");
   const { data: items } = await supabase
     .from("items")
@@ -34,6 +35,8 @@ export default async function ModelsPage() {
               is_active: m.is_active,
               item_id: m.item_id,
               size_chart_id: m.size_chart_id,
+              average_consumption:
+                m.average_consumption == null ? null : Number(m.average_consumption),
               items: m.items as { name: string } | null,
               size_charts: m.size_charts as { name: string } | null,
             }))}
@@ -53,6 +56,13 @@ export default async function ModelsPage() {
             required
             placeholder="Chart"
             options={(charts ?? []).map((c) => ({ id: c.id, label: c.name }))}
+          />
+          <NumericInput
+            decimal
+            name="average_consumption"
+            aria-label="Avg consumption"
+            placeholder="Avg consumption"
+            className="w-36 rounded border px-2 py-1"
           />
           <Btn type="submit">Add</Btn>
         </AddForm>

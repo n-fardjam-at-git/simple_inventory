@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import Link from "next/link";
+import { DismissNote } from "@/components/DismissNote";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SelectableRow, RowButtons, useList, useListRow } from "@/components/list/ListTable";
 import { FitList } from "@/components/list/FitList";
 import { isSpecialPriceStage, productTitle, productTypeLabel, priceStageLabel } from "@/lib/product-type";
-import { PriceStageRadios } from "@/components/PriceStageRadios";
-import { AvailabilityPicker } from "@/components/AvailabilityPicker";
 import { type SeasonRow } from "@/lib/season";
 import { deleteProduct, updateProductRow } from "@/app/(app)/products/actions";
 import { toSentenceCase } from "@/lib/text-case";
 import { NumericInput } from "@/components/NumericInput";
-import { ComboBox } from "@/components/ComboBox";
+import type { ProductTemplateOption } from "./SaveAsTemplatePopup";
+import { ProductEditPopup } from "./ProductEditPopup";
 
 export type Row = {
   id: string;
@@ -23,6 +22,7 @@ export type Row = {
   availability?: string | null;
   is_active: boolean;
   collection_id?: string | null;
+  size_chart_id?: string | null;
   collections?: { name: string } | null;
   lots: {
     lot_no: string;
@@ -52,6 +52,7 @@ export function ProductsTable({
   resumeId = null,
   focusId = null,
   focusNonce = 0,
+  templates = [],
 }: {
   rows: Row[];
   canEdit: boolean;
@@ -61,6 +62,7 @@ export function ProductsTable({
   resumeId?: string | null;
   focusId?: string | null;
   focusNonce?: number;
+  templates?: ProductTemplateOption[];
 }) {
   useEffect(() => {
     if (!resumeId || typeof window === "undefined") return;
@@ -87,7 +89,6 @@ export function ProductsTable({
             <th>{showType ? "Cost" : "Price"}</th>
             {showType ? <th>Status</th> : null}
             {showType ? null : <th>Collection</th>}
-            {showType ? null : <th></th>}
             <th></th>
           </tr>
         </thead>
@@ -99,6 +100,7 @@ export function ProductsTable({
           showType={showType}
           seasons={seasons}
           collections={collections}
+          templates={templates}
         />
       )}
     />
@@ -111,77 +113,49 @@ function ProductRow({
   showType,
   seasons,
   collections,
+  templates,
 }: {
   row: Row;
   canEdit: boolean;
   showType: boolean;
   seasons: SeasonRow[];
   collections: { id: string; name: string; is_active: boolean }[];
+  templates: ProductTemplateOption[];
 }) {
-  const merch = (row.type ?? 1) === 1;
-  const [name, setName] = useState(row.name ?? "");
-  const [price, setPrice] = useState(String(row.standard_price));
-  const [active, setActive] = useState(row.is_active);
-  const [priceStage, setPriceStage] = useState(row.price_stage ?? 1);
-  const [availability, setAvailability] = useState<string | null>(row.availability ?? null);
-  const [collectionId, setCollectionId] = useState(row.collection_id ?? "");
-  const [pending, start] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
-
-  const snapshot = {
-    name: row.name ?? "",
-    price: String(row.standard_price),
-    active: row.is_active,
-    priceStage: row.price_stage ?? 1,
-    availability: row.availability ?? null,
-    collectionId: row.collection_id ?? "",
-  };
-  const dirty =
-    name !== snapshot.name ||
-    Number(price) !== Number(snapshot.price) ||
-    active !== snapshot.active ||
-    (merch && priceStage !== snapshot.priceStage) ||
-    (merch && availability !== snapshot.availability) ||
-    (merch && collectionId !== snapshot.collectionId);
-
-  const list = useList();
-  const router = useRouter();
-  function persist() {
-    return new Promise<boolean>((resolve) => {
-      start(async () => {
-          const message = await updateProductRow(row.id, {
-            name: merch ? undefined : name,
-            standard_price: Number(price) || 0,
-            is_active: active,
-            price_stage: merch ? priceStage : undefined,
-            availability: merch ? availability : undefined,
-            collection_id: merch ? collectionId : undefined,
-          });
-        if (message) {
-          setErr(message);
-          resolve(false);
-        } else {
-          setErr(null);
-          list.finishEdit(row.id);
-          resolve(true);
-        }
-      });
-    });
+  const merch = (row.type ?? 1) === 1 && !showType;
+  if (merch) {
+    return (
+      <MerchRow
+        row={row}
+        canEdit={canEdit}
+        seasons={seasons}
+        collections={collections}
+        templates={templates}
+      />
+    );
   }
-  const { editing, requestEdit, requestCancel } = useListRow(row.id, {
-    dirty,
-    revert: () => {
-      setName(snapshot.name);
-      setPrice(snapshot.price);
-      setActive(snapshot.active);
-      setPriceStage(snapshot.priceStage);
-      setAvailability(snapshot.availability);
-      setCollectionId(snapshot.collectionId);
-      setErr(null);
-    },
-    save: persist,
-  });
+  return <ChargeRow row={row} canEdit={canEdit} showType={showType} />;
+}
 
+function MerchRow({
+  row,
+  canEdit,
+  seasons,
+  collections,
+  templates,
+}: {
+  row: Row;
+  canEdit: boolean;
+  seasons: SeasonRow[];
+  collections: { id: string; name: string; is_active: boolean }[];
+  templates: ProductTemplateOption[];
+}) {
+  const [, start] = useTransition();
+  const [job, setJob] = useState<null | "delete">(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [popupDirty, setPopupDirty] = useState(false);
+  const persistRef = useRef<() => Promise<boolean>>(async () => true);
+  const router = useRouter();
   const title = productTitle({
     type: row.type,
     name: row.name,
@@ -192,69 +166,163 @@ function ProductRow({
     .filter(Boolean)
     .join(", ");
   const brandItem = [row.lots?.brands?.name, row.models?.items?.name].filter(Boolean).join(" • ");
-  const availText = (editing ? availability : row.availability) ?? "";
+
+  const { editing, requestEdit, requestCancel, finishEdit } = useListRow(row.id, {
+    dirty: popupDirty,
+    revert: () => setPopupDirty(false),
+    save: () => persistRef.current(),
+  });
+
+  useEffect(() => {
+    if (!editing) setPopupDirty(false);
+  }, [editing]);
+
+  return (
+    <SelectableRow id={row.id} dimmed={!row.is_active}>
+      <td className="py-1.5">
+        <div className="font-medium">
+          {title}
+          {brandItem ? (
+            <span className="ml-1.5 text-xs font-light text-stone-500">{brandItem}</span>
+          ) : null}
+        </div>
+        <p className="text-xs font-light leading-tight text-stone-500">
+          {fabric ? `${fabric}. ` : ""}
+          {row.is_active ? "Active" : "Inactive"}
+          {row.availability ? ` · ${row.availability}` : null}
+        </p>
+        {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
+      </td>
+      <td className="whitespace-nowrap text-xs">
+        {isSpecialPriceStage(row.price_stage) ? (
+          <span className="font-medium text-red-700">{priceStageLabel(row.price_stage)}</span>
+        ) : null}
+      </td>
+      <td>{`$${Number(row.standard_price).toFixed(2)}`}</td>
+      <td className="text-sm">{row.collections?.name ?? ""}</td>
+      <td className="py-1">
+        {canEdit ? (
+          <RowButtons
+            editing={editing}
+            dirty={false}
+            deleting={job === "delete"}
+            onEdit={requestEdit}
+            onSave={() => void persistRef.current()}
+            onCancel={() => requestCancel()}
+            onDelete={() => {
+              if (!confirm(`Delete ${title}?`)) return;
+              setJob("delete");
+              start(async () => {
+                try {
+                  const message = await deleteProduct(row.id);
+                  if (message) setErr(message);
+                } finally {
+                  setJob(null);
+                }
+              });
+            }}
+          />
+        ) : null}
+      </td>
+      {editing ? (
+        <ProductEditPopup
+          row={row}
+          title={title}
+          seasons={seasons}
+          collections={collections}
+          templates={templates}
+          persistRef={persistRef}
+          onDirtyChange={setPopupDirty}
+          onCancel={() => requestCancel()}
+          onSaved={() => {
+            setPopupDirty(false);
+            finishEdit();
+            router.refresh();
+          }}
+        />
+      ) : null}
+    </SelectableRow>
+  );
+}
+
+function ChargeRow({
+  row,
+  canEdit,
+  showType,
+}: {
+  row: Row;
+  canEdit: boolean;
+  showType: boolean;
+}) {
+  const [name, setName] = useState(row.name ?? "");
+  const [price, setPrice] = useState(String(row.standard_price));
+  const [active, setActive] = useState(row.is_active);
+  const [, start] = useTransition();
+  const [job, setJob] = useState<null | "save" | "delete">(null);
+  const [err, setErr] = useState<string | null>(null);
+  const snapshot = {
+    name: row.name ?? "",
+    price: String(row.standard_price),
+    active: row.is_active,
+  };
+  const dirty =
+    name !== snapshot.name || Number(price) !== Number(snapshot.price) || active !== snapshot.active;
+  const list = useList();
+  function persist() {
+    return new Promise<boolean>((resolve) => {
+      setJob("save");
+      start(async () => {
+        try {
+          const message = await updateProductRow(row.id, {
+            name,
+            standard_price: Number(price) || 0,
+            is_active: active,
+          });
+          if (message) {
+            setErr(message);
+            resolve(false);
+          } else {
+            setErr(null);
+            list.finishEdit(row.id);
+            resolve(true);
+          }
+        } finally {
+          setJob(null);
+        }
+      });
+    });
+  }
+  const { editing, requestEdit, requestCancel } = useListRow(row.id, {
+    dirty,
+    revert: () => {
+      setName(snapshot.name);
+      setPrice(snapshot.price);
+      setActive(snapshot.active);
+      setErr(null);
+    },
+    save: persist,
+  });
+  const title = productTitle({
+    type: row.type,
+    name: row.name,
+    lots: row.lots,
+    models: row.models,
+  });
 
   return (
     <SelectableRow id={row.id} dimmed={!row.is_active}>
       {showType ? <td className="py-1.5">{productTypeLabel(row.type)}</td> : null}
       <td className={showType ? "font-medium" : "py-1.5"}>
-        <div className="font-medium">
-          {editing && !merch ? (
-            <input
-              className="rounded border px-1 py-0.5"
-              value={name}
-              onChange={(e) => setName(toSentenceCase(e.target.value))}
-            />
-          ) : (
-            <>
-              {title}
-              {merch && brandItem ? (
-                <span className="ml-1.5 text-xs font-light text-stone-500">{brandItem}</span>
-              ) : null}
-            </>
-          )}
-        </div>
-        {merch ? (
-          <>
-            <p className="text-xs font-light leading-tight text-stone-500">
-              {fabric ? `${fabric}. ` : ""}
-              {editing ? (
-                <button
-                  type="button"
-                  className="text-violet-700 underline decoration-violet-400"
-                  onClick={() => setActive((v) => !v)}
-                >
-                  {active ? "Active" : "Inactive"}
-                </button>
-              ) : active ? (
-                "Active"
-              ) : (
-                "Inactive"
-              )}
-              {!editing && availText ? ` · ${availText}` : null}
-            </p>
-            {editing ? (
-              <div className="mt-1">
-                <AvailabilityPicker
-                  formFields={false}
-                  seasons={seasons}
-                  value={availability}
-                  onChange={setAvailability}
-                />
-              </div>
-            ) : null}
-          </>
-        ) : null}
+        {editing ? (
+          <input
+            className="rounded border px-1 py-0.5"
+            value={name}
+            onChange={(e) => setName(toSentenceCase(e.target.value))}
+          />
+        ) : (
+          <div className="font-medium">{title}</div>
+        )}
       </td>
-      {showType ? null : (
-        <td className="whitespace-nowrap text-xs">
-          {editing ? (
-            <PriceStageRadios value={priceStage} onChange={setPriceStage} />
-          ) : isSpecialPriceStage(row.price_stage) ? (
-            <span className="font-medium text-red-700">{priceStageLabel(row.price_stage)}</span>
-          ) : null}
-        </td>
-      )}
       <td>
         {editing ? (
           <NumericInput
@@ -267,76 +335,48 @@ function ProductRow({
           `$${Number(row.standard_price).toFixed(2)}`
         )}
       </td>
-      {showType ? null : (
-        <td className="text-sm">
-          {editing ? (
-            <ComboBox
-              allowEmpty
-              className="w-40 rounded border px-1 py-0.5"
-              value={collectionId}
-              onChange={setCollectionId}
-              options={collections
-                .filter((c) => c.is_active || c.id === collectionId)
-                .map((c) => ({ id: c.id, label: c.name }))}
+      <td>
+        {editing ? (
+          <label className="text-xs">
+            <input
+              type="checkbox"
+              className="mr-1"
+              checked={active}
+              onChange={(e) => setActive(e.target.checked)}
             />
-          ) : (
-            row.collections?.name ?? ""
-          )}
-        </td>
-      )}
-      {showType ? (
-        <td>
-          {editing ? (
-            <label className="text-xs">
-              <input
-                type="checkbox"
-                className="mr-1"
-                checked={active}
-                onChange={(e) => setActive(e.target.checked)}
-              />
-              Active
-            </label>
-          ) : row.is_active ? (
-            "Active"
-          ) : (
-            "Inactive"
-          )}
-        </td>
-      ) : null}
-      {showType ? null : (
-        <td>
-          <Link
-            className="text-xs text-stone-700 underline"
-            href={editing ? `/products/${row.id}?edit=1` : `/products/${row.id}`}
-            onClick={(e) => {
-              if (!editing || !dirty) return;
-              e.preventDefault();
-              list.tryLeave(() => router.push(`/products/${row.id}?edit=1`));
-            }}
-          >
-            Settings
-          </Link>
-        </td>
-      )}
+            Active
+          </label>
+        ) : row.is_active ? (
+          "Active"
+        ) : (
+          "Inactive"
+        )}
+      </td>
       <td className="py-1">
         {canEdit ? (
           <RowButtons
             editing={editing}
             dirty={dirty}
+            saving={job === "save"}
+            deleting={job === "delete"}
             onEdit={requestEdit}
             onSave={() => void persist()}
             onCancel={requestCancel}
             onDelete={() => {
               if (!confirm(`Delete ${title}?`)) return;
+              setJob("delete");
               start(async () => {
-                const message = await deleteProduct(row.id);
-                if (message) setErr(message);
+                try {
+                  const message = await deleteProduct(row.id);
+                  if (message) setErr(message);
+                } finally {
+                  setJob(null);
+                }
               });
             }}
           />
         ) : null}
-        {err ? <p className="text-xs text-red-700">{err}</p> : null}
-        {pending ? <p className="text-xs text-stone-400">Working…</p> : null}
+        {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
       </td>
     </SelectableRow>
   );

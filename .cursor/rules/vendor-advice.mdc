@@ -1,0 +1,29 @@
+---
+description: Vendor advice — factory shipment notice that staff accept into an unposted vendor shipment.
+alwaysApply: false
+---
+
+# Vendor advice
+
+Reference: `src/app/(app)/vendor-advices/`. Users: `src/app/(app)/users/`. SQL: `supabase/migrations/0042_vendor_advices.sql`.
+
+When the user says **vendor-advice** or **vendor packing list**, reuse this. Do not let a vendor write `vendor_shipments`.
+
+## Names
+
+- **UI:** packing list. Nav and page title: **Vendor packing lists**. The route stays `/vendor-advices`.
+- **Tables:** `vendor_advices`, `vendor_advice_products`, `vendor_advice_cells`. Code and SQL keep **advice**. Do not rename those tables to packing list.
+
+## Logins
+
+- `profiles.vendor_id` / `profiles.customer_id`. Role `vendor` requires a vendor and no customer. Staff roles have neither.
+- **Users** (admin Fit List) edits display name, role, and the vendor or customer. It does not create the email login.
+- A vendor login sees **Cutting orders** (submitted cuttings, read-only, `/vendor-cuttings`) and **Vendor packing lists**.
+- Admin and warehouse nav shows a badge with the number of **submitted** packing lists. Hidden when the count is 0. Vendors do not see the badge.
+
+## Advice
+
+- `vendor_advices` (draft → submitted → accepted), `vendor_advice_products`, `vendor_advice_cells`.
+- Vendor Fit List. Add a draft (ship date, air way). Edit ship date, air way, notes while draft. **Submit** is the paper-plane sys image (`SysSend`). It stays on the row and is **disabled** once the advice is no longer draft. Delete only while draft.
+- Open panel: cutting-view Fit List and **variable-size/drop-matrix**. Add = open cutting Combo for this factory, then a popup Fit List of products on that cutting. New lines are seeded with remaining cutting qty (`qty_ordered − qty_received`, floored at 0; skip zeros), same as a vendor shipment. The vendor can still edit those qty before Submit.
+- Staff list is view-only on the advice. **Accept** copies lines into a new unposted vendor shipment (received date = today, air way copied) and marks the advice accepted. **Return** sets it back to draft. Post stays on the shipment.

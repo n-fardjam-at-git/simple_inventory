@@ -8,16 +8,23 @@ type Template = { id: string; name: string; target: string; mappings: unknown };
 
 export function ImportForm({ templates }: { templates: Template[] }) {
   const [result, setResult] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const [headers, setHeaders] = useState<string[]>([]);
   const [sheets, setSheets] = useState<string[]>([]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (importing) return;
+    setImporting(true);
     setResult(null);
-    const fd = new FormData(e.currentTarget);
-    const res = await fetch("/api/import", { method: "POST", body: fd });
-    const json = await res.json();
-    setResult(JSON.stringify(json, null, 2));
+    try {
+      const fd = new FormData(e.currentTarget);
+      const res = await fetch("/api/import", { method: "POST", body: fd });
+      const json = await res.json();
+      setResult(JSON.stringify(json, null, 2));
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function peek(file: File) {
@@ -74,7 +81,7 @@ export function ImportForm({ templates }: { templates: Template[] }) {
       {headers.length ? (
         <p className="text-stone-500">Headers: {headers.join(", ")}</p>
       ) : null}
-      <Btn type="submit">Preview & import</Btn>
+      <Btn type="submit" busy={importing}>Preview & import</Btn>
       {result ? (
         <pre className="overflow-auto rounded bg-stone-100 p-2 text-xs">{result}</pre>
       ) : null}

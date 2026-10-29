@@ -15,7 +15,7 @@ export default async function CuttingOrderDetail({
   const supabase = await createClient();
   const { data: order } = await supabase
     .from("cutting_orders")
-    .select("*, vendors ( name )")
+    .select("*, vendors ( name ), brands ( name )")
     .eq("id", id)
     .single();
   const { data: lines } = await supabase
@@ -27,14 +27,18 @@ export default async function CuttingOrderDetail({
     <div className="space-y-4">
       <PageTitle title={cuttingOrderLabel(order?.order_num as number | undefined)} />
       <p className="text-sm text-stone-600">
-        Vendor {(order?.vendors as { name: string } | null)?.name} · Arrival{" "}
-        {order?.arrival_date} · Status {order?.status}
+        Vendor {(order?.vendors as { name: string } | null)?.name} · Brand{" "}
+        {(order?.brands as { name: string } | null)?.name} · Arrival{" "}
+        {order?.arrival_date} · Submitted {order?.date_submitted ?? "—"} · {order?.status ? "Open" : "Closed"}
       </p>
       <form action={setOrderStatus.bind(null, id)} className="flex gap-2 text-sm">
-        <select name="status" defaultValue={order?.status} className="rounded border px-2 py-1">
-          <option value="open">open</option>
-          <option value="received">received</option>
-          <option value="cancelled">cancelled</option>
+        <select
+          name="status"
+          defaultValue={order?.status ? "true" : "false"}
+          className="rounded border px-2 py-1"
+        >
+          <option value="true">Open</option>
+          <option value="false">Closed</option>
         </select>
         <Btn type="submit">Update order status</Btn>
       </form>
@@ -46,13 +50,17 @@ export default async function CuttingOrderDetail({
             return (
               <li key={l.product_id} className="flex items-center justify-between gap-2">
                 <span>
-                  {p?.name} — {l.status}
+                  {p?.name} — {l.status ? "Open" : "Complete"}
                 </span>
                 <form action={setProductStatus.bind(null, id)} className="flex gap-1">
                   <input type="hidden" name="product_id" value={l.product_id} />
-                  <select name="status" defaultValue={l.status} className="rounded border px-1">
-                    <option value="open">open</option>
-                    <option value="complete">complete</option>
+                  <select
+                    name="status"
+                    defaultValue={l.status ? "true" : "false"}
+                    className="rounded border px-1"
+                  >
+                    <option value="true">Open</option>
+                    <option value="false">Complete</option>
                   </select>
                   <Btn type="submit">Save</Btn>
                 </form>

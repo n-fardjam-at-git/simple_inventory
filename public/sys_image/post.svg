@@ -1,0 +1,21 @@
+<svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M10 14C10 10.6863 18.0589 8 28 8C37.9411 8 46 10.6863 46 14C46 17.3137 37.9411 20 28 20C18.0589 20 10 17.3137 10 14Z" fill="url(#db-amber-top)"/>
+  <path d="M10 14V24C10 27.3137 18.0589 30 28 30C37.9411 30 46 27.3137 46 24V14C46 17.3137 37.9411 20 28 20C18.0589 20 10 17.3137 10 14Z" fill="url(#db-amber-mid)"/>
+  <path d="M10 24V34C10 37.3137 18.0589 40 28 40C37.9411 40 46 37.3137 46 34V24C46 27.3137 37.9411 30 28 30C18.0589 30 10 27.3137 10 24Z" fill="url(#db-amber-base)"/>
+  <circle cx="38" cy="38" r="11" fill="#78350F"/>
+  <path d="M38 31L31 38H35V45H41V38H45L38 31Z" fill="#FEF3C7"/>
+  <defs>
+    <linearGradient id="db-amber-top" x1="10" y1="8" x2="46" y2="20" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="db-amber-mid" x1="10" y1="14" x2="46" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#D97706"/>
+    </linearGradient>
+    <linearGradient id="db-amber-base" x1="10" y1="24" x2="46" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D97706"/>
+      <stop offset="1" stop-color="#B45309"/>
+    </linearGradient>
+  </defs>
+</svg>

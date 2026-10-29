@@ -1,0 +1,29 @@
+---
+description: Variable size/drop matrix — sparse qty grid with drop Combo rows. Apply when the user says variable-size/drop-matrix or asks to reuse the cutting-order qty chart.
+alwaysApply: false
+---
+
+# Variable size/drop matrix
+
+Reference: `src/app/(app)/cutting-orders/CuttingDropQtyGrid.tsx` (on `cutting_order_products` in the order-details-panel). Types `Cell`, `MatrixSize`, `MatrixDrop` from `src/components/matrix/QtyMatrix.tsx`.
+
+When the user says **variable-size/drop-matrix**, reuse this instead of the dense inventory `QtyMatrix` (every drop × every size).
+
+## Layout
+
+- Size columns (chart order) + row **total** + grand total to the right of the table.
+- Each **row is one drop**. Combo Box of unused product drops (edit). Used drops leave the list.
+- New line with no qty: **one blank drop row**. No-drop products (`isNoDropAxis`): one row, no dropdown.
+- Edit: **↓** on the last row adds another (max = remaining unused drops). **×** removes a drop row (always keep at least one blank row).
+- **↓** only if the current last row has a drop **and** at least one qty > 0. ArrowDown on the last qty cell does the same.
+- After adding a row, focus the new drop Combo Box.
+- View: only drops that have saved cells. Zeros as empty, not `0`.
+
+## Edit / save
+
+- `NumericInput` cells and the drop Combo; arrow keys and Enter/Shift+Enter move within `[data-matrix-grid]` (drop is column 0). Enter on a drop Combo commits the first match, then moves to the first qty cell.
+- Hidden `keepDrop:<id>` lives in `<th>`/`<td>`, never as a child of `<tr>`.
+- Save upserts qty for chosen drops; **deletes** cells for drops no longer on the grid. Do not change `qty_received` here.
+- View mode must read saved `cells` after Save (do not keep edit `useState` as the view). On a successful save, stay in edit (inputs keep what was entered) until `router.refresh()` has rendered that row, then leave edit. **Working…** floats to the left of **Save** (see **Working…**). **Delete** does the same while a removal finishes. A failed save stays in edit and shows the error.
+
+Do not use this for merchandise **on-hand** inventory (full product size/drop grid).

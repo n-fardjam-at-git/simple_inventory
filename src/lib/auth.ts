@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-export type Role = "admin" | "warehouse" | "sales_rep" | "customer";
+export type Role = "admin" | "warehouse" | "sales_rep" | "customer" | "vendor";
 
 export type Profile = {
   id: string;
@@ -38,6 +38,14 @@ export async function requireRoles(roles: Role[]) {
 
 export function canSeeNav(role: Role, href: string) {
   if (role === "admin") return true;
+  if (role === "vendor") {
+    return (
+      href === "/vendor-advices" ||
+      href.startsWith("/vendor-advices/") ||
+      href === "/vendor-cuttings" ||
+      href.startsWith("/vendor-cuttings/")
+    );
+  }
   const warehouse = [
     "/",
     "/products",
@@ -45,6 +53,7 @@ export function canSeeNav(role: Role, href: string) {
     "/alerts",
     "/vendors",
     "/cutting-orders",
+    "/vendor-shipments",
     "/customer-shipments",
     "/customers",
   ];

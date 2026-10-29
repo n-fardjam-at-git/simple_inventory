@@ -1,9 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/auth";
 import { PageTitle, Card } from "@/components/ui";
 import { cuttingOrderLabel } from "@/lib/cutting-order";
 
 export default async function DashboardPage() {
+  const profile = await getProfile();
+  if (profile?.role === "vendor") redirect("/vendor-advices");
   const supabase = await createClient();
   const { data: inventory } = await supabase
     .from("inventory")
@@ -15,7 +19,7 @@ export default async function DashboardPage() {
   const { data: orders } = await supabase
     .from("cutting_orders")
     .select("id, order_num, arrival_date, status, vendors ( name )")
-    .eq("status", "open")
+    .eq("status", true)
     .order("arrival_date")
     .limit(8);
 

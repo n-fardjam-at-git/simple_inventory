@@ -1,5 +1,6 @@
 "use client";
 
+import { DismissNote } from "@/components/DismissNote";
 import { useState, useTransition } from "react";
 import { SelectableRow, RowButtons, useList, useListRow } from "@/components/list/ListTable";
 import { FitList } from "@/components/list/FitList";
@@ -12,6 +13,7 @@ export type LotRow = {
   lot_no: string;
   article: string | null;
   color_num: string | null;
+  mill_article: string | null;
   is_active: boolean;
   color_id: string | null;
   pattern_id: string | null;
@@ -88,7 +90,9 @@ function LotRowView({
   const [patternId, setPatternId] = useState(row.pattern_id ?? "");
   const [contentId, setContentId] = useState(row.content_id ?? "");
   const [brandId, setBrandId] = useState(row.brand_id ?? "");
-  const [pending, start] = useTransition();
+  const [millArticle, setMillArticle] = useState(row.mill_article ?? "");
+  const [, start] = useTransition();
+  const [job, setJob] = useState<null | "save" | "delete">(null);
   const [err, setErr] = useState<string | null>(null);
 
   const snapshot = {
@@ -96,30 +100,38 @@ function LotRowView({
     patternId: row.pattern_id ?? "",
     contentId: row.content_id ?? "",
     brandId: row.brand_id ?? "",
+    millArticle: row.mill_article ?? "",
   };
   const dirty =
     colorId !== snapshot.colorId ||
     patternId !== snapshot.patternId ||
     contentId !== snapshot.contentId ||
-    brandId !== snapshot.brandId;
+    brandId !== snapshot.brandId ||
+    millArticle !== snapshot.millArticle;
 
   const list = useList();
   function persist() {
     return new Promise<boolean>((resolve) => {
+      setJob("save");
       start(async () => {
-        const message = await updateLotLookups(row.id, {
-          color_id: colorId,
-          pattern_id: patternId,
-          content_id: contentId,
-          brand_id: brandId,
-        });
-        if (message) {
-          setErr(message);
-          resolve(false);
-        } else {
-          setErr(null);
-          list.finishEdit(row.id);
-          resolve(true);
+        try {
+          const message = await updateLotLookups(row.id, {
+            color_id: colorId,
+            pattern_id: patternId,
+            content_id: contentId,
+            brand_id: brandId,
+            mill_article: millArticle,
+          });
+          if (message) {
+            setErr(message);
+            resolve(false);
+          } else {
+            setErr(null);
+            list.finishEdit(row.id);
+            resolve(true);
+          }
+        } finally {
+          setJob(null);
         }
       });
     });
@@ -131,6 +143,7 @@ function LotRowView({
       setPatternId(snapshot.patternId);
       setContentId(snapshot.contentId);
       setBrandId(snapshot.brandId);
+      setMillArticle(snapshot.millArticle);
       setErr(null);
     },
     save: persist,
@@ -143,7 +156,18 @@ function LotRowView({
   return (
     <SelectableRow id={row.id} dimmed={!row.is_active}>
       <td className="py-1 font-medium">{row.lot_no}</td>
-      <td>{row.article}</td>
+      <td>
+        <div>{row.article}</div>
+        {editing ? (
+          <input
+            className="mt-1 w-full rounded border px-1 py-0.5"
+            aria-label="Mill article"
+            placeholder="Mill article"
+            value={millArticle}
+            onChange={(e) => setMillArticle(e.target.value)}
+          />
+        ) : null}
+      </td>
       <td>{row.color_num}</td>
       <td>
         {editing ? (
@@ -201,19 +225,25 @@ function LotRowView({
         <RowButtons
           editing={editing}
           dirty={dirty}
+          saving={job === "save"}
+          deleting={job === "delete"}
           onEdit={requestEdit}
           onSave={() => void persist()}
           onCancel={requestCancel}
           onDelete={() => {
             if (!confirm(`Delete lot ${row.lot_no}?`)) return;
+            setJob("delete");
             start(async () => {
-              const message = await deleteLot(row.id);
-              if (message) setErr(message);
+              try {
+                const message = await deleteLot(row.id);
+                if (message) setErr(message);
+              } finally {
+                setJob(null);
+              }
             });
           }}
         />
-        {err ? <p className="text-xs text-red-700">{err}</p> : null}
-        {pending ? <p className="text-xs text-stone-400">Working…</p> : null}
+        {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
       </td>
     </SelectableRow>
   );

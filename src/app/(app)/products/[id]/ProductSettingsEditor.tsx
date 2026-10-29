@@ -1,5 +1,6 @@
 "use client";
 
+import { DismissNote } from "@/components/DismissNote";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { UpchargeMatrix, type Cell, type MatrixDrop, type MatrixSize } from "@/components/matrix/QtyMatrix";
@@ -65,6 +66,7 @@ export function ProductSettingsEditor({
   const [priceSaved, setPriceSaved] = useState(0);
   const [subsetSaved, setSubsetSaved] = useState(0);
   const [subsetErr, setSubsetErr] = useState<string | null>(null);
+  const [subsetSaving, setSubsetSaving] = useState(false);
   const [sizeIds, setSizeIds] = useState(selectedSizeIds);
   const [dropIds, setDropIds] = useState(selectedDropIds);
   const ignorePriceDirtyUntil = useRef(0);
@@ -149,18 +151,20 @@ export function ProductSettingsEditor({
               </div>
             ) : null}
             <div className="flex items-center gap-3">
-              <Btn type="submit">Save prices</Btn>
               {priceDirty ? (
-                <button
-                  type="button"
-                  className="rounded border border-stone-300 px-3 py-1.5 text-sm"
-                  onClick={() => {
-                    setPriceKey((k) => k + 1);
-                    setPriceDirty(false);
-                  }}
-                >
-                  Cancel
-                </button>
+                <>
+                  <Btn type="submit">Save</Btn>
+                  <button
+                    type="button"
+                    className="rounded border border-stone-300 px-3 py-1.5 text-sm"
+                    onClick={() => {
+                      setPriceKey((k) => k + 1);
+                      setPriceDirty(false);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
               ) : null}
               <SavedFade showKey={priceSaved} />
             </div>
@@ -181,33 +185,39 @@ export function ProductSettingsEditor({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (subsetSaving) return;
+                setSubsetSaving(true);
                 void (async () => {
-                  const lockedSizes = chartSizes
-                    .filter((s) => (qtyBySize.get(s.id) ?? 0) > 0)
-                    .map((s) => s.id);
-                  const lockedDrops = shownDrops
-                    .filter((d) => (qtyByDrop.get(d.id) ?? 0) > 0)
-                    .map((d) => d.id);
-                  const nextSizes = [...new Set([...sizeIds, ...lockedSizes])];
-                  const resolved = resolveProductDropIds(chartDrops, [
-                    ...dropIds,
-                    ...lockedDrops,
-                  ]);
-                  if (resolved.error) {
-                    setSubsetErr(resolved.error);
-                    return;
+                  try {
+                    const lockedSizes = chartSizes
+                      .filter((s) => (qtyBySize.get(s.id) ?? 0) > 0)
+                      .map((s) => s.id);
+                    const lockedDrops = shownDrops
+                      .filter((d) => (qtyByDrop.get(d.id) ?? 0) > 0)
+                      .map((d) => d.id);
+                    const nextSizes = [...new Set([...sizeIds, ...lockedSizes])];
+                    const resolved = resolveProductDropIds(chartDrops, [
+                      ...dropIds,
+                      ...lockedDrops,
+                    ]);
+                    if (resolved.error) {
+                      setSubsetErr(resolved.error);
+                      return;
+                    }
+                    const nextDrops = resolved.ids;
+                    const message = await saveSubset(productId, nextSizes, nextDrops);
+                    if (message) {
+                      setSubsetErr(message);
+                      return;
+                    }
+                    setSizeIds(nextSizes);
+                    setDropIds(nextDrops);
+                    setSubsetErr(null);
+                    setSubsetSaved((n) => n + 1);
+                    router.refresh();
+                  } finally {
+                    setSubsetSaving(false);
                   }
-                  const nextDrops = resolved.ids;
-                  const message = await saveSubset(productId, nextSizes, nextDrops);
-                  if (message) {
-                    setSubsetErr(message);
-                    return;
-                  }
-                  setSizeIds(nextSizes);
-                  setDropIds(nextDrops);
-                  setSubsetErr(null);
-                  setSubsetSaved((n) => n + 1);
-                  router.refresh();
                 })();
               }}
             >
@@ -280,23 +290,29 @@ export function ProductSettingsEditor({
                 </>
               )}
               <div className="flex items-center gap-3">
-                <Btn type="submit">Save subset</Btn>
                 {subsetDirty ? (
-                  <button
-                    type="button"
-                    className="rounded border border-stone-300 px-3 py-1.5 text-sm"
-                    onClick={() => {
-                      setSizeIds(selectedSizeIds);
-                      setDropIds(selectedDropIds);
-                      setSubsetErr(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
+                  <>
+                    <Btn type="submit" busy={subsetSaving}>Save</Btn>
+                    <button
+                      type="button"
+                      className="rounded border border-stone-300 px-3 py-1.5 text-sm"
+                      onClick={() => {
+                        setSizeIds(selectedSizeIds);
+                        setDropIds(selectedDropIds);
+                        setSubsetErr(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </>
                 ) : null}
                 <SavedFade showKey={subsetSaved} />
               </div>
-              {subsetErr ? <p className="mt-2 text-xs text-red-700">{subsetErr}</p> : null}
+              {subsetErr ? (
+                <DismissNote className="mt-2 text-xs text-red-700" onDismiss={() => setSubsetErr(null)}>
+                  {subsetErr}
+                </DismissNote>
+              ) : null}
             </form>
           </Card>
         ) : null}

@@ -1,0 +1,26 @@
+---
+description: Add-product — header + equal-width item button-list that opens a Combo popup to insert a line. Apply when the user says add-product or asks to reuse the cutting-order Add a product buttons.
+alwaysApply: false
+---
+
+# Add-product
+
+Reference: `src/app/(app)/cutting-orders/OrderDetailsPanel.tsx` (the **Add a product** box).
+
+When the user says **add-product**, reuse this instead of a lone Combo, an Add row on the Fit List, or a modal picker.
+
+## Chrome
+
+- **Centered** single box: stone-100 header bar (**Add a product**), then a segmented **button-list**.
+- Equal-width buttons (`grid-flow-col auto-cols-fr`). Filled (stone-900) while that button’s popup is open.
+- At most **15** buttons: **Any** first, then the first **14** items with `in_set = true` (name order). Extra in-set items are still reachable via **Any**.
+
+## Picker
+
+- Press a button → small popup **under that button**. If the button is near the **right edge**, shift the popup left so the full window stays in the panel. Combo Box of **active** merchandise whose lot is the **selected order lot** and whose `brand_id` matches the cutting order. Item buttons also filter `models.item_id`. **Any** skips the item filter (still that lot only).
+- Combo label is `products.name` when set, else lot>model title.
+- **New** (small red, like add-lot) opens a create-product popup for the **selected order lot**. Lot is locked. Model Combo is the item button’s item, or any model if **Any**. Same merchandise fields as New product (collection, price, stage, availability, size/drop). Header **Upcharges** (after a model) opens a sibling popup with the `$ extra` matrix, stretched left to the panel edge; Escape closes that popup first. Create does not attach until **Add**.
+- **Add** inserts the line (`status` true / Open) and closes; duplicate → “Already on this order.”
+- **Cancel** or Escape closes the popup only (does not close a docked panel).
+
+Do not put an **Add** row on the Fit List that this picker feeds.

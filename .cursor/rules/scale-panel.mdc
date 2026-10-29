@@ -1,0 +1,28 @@
+---
+description: Scale panel — right docked Fit List of size/drop percentage scales for a cutting-order product line.
+alwaysApply: false
+---
+
+# Scale panel
+
+Reference: `src/app/(app)/cutting-orders/ScalePanel.tsx` (opens from **Scale** on an order-products Fit List row).
+
+When the user says **scale-panel**, reuse this instead of a modal or a new page.
+
+## What a scale is
+
+Stamp (same idea as product templates): `size_drop_scales` **name + brand_id + item_id + size_chart_id**, unique `(brand, name)`. Child `size_drop_scale_cells` are **size + drop + percent** of 100. Percents are the stored mix. They are not edited on the Fit List. The Fit List is still filtered to the opening line’s **brand, item, and size chart**.
+
+**Add** samples the **saved** size/drop grid on the product line that opened the panel (`qty / grid total`). If that grid is empty, hide **name to add**, **Add**, and **Update**. **Update** restamps that scale’s percents from the same grid (name unchanged). Scale names are **sentence case**.
+
+## Chrome
+
+- **Docked right**, nested over the order-details-panel (~55%). Escape / overlay / × close only the scale-panel.
+- Title **Scale • {model}**, with **brand • item** in a light font under it.
+- List is filtered to the opening line’s **brand, item, and size chart**.
+- Above the list: **name to add** + **Add** (hidden when the line has no sized qty).
+- Fit List (inventory boards): **scale name** with **last_updated** under it (no label), **qty_to_distribute** (only editable field; working qty, not stored), **percentage grid**, **Update** + **Apply** + **Delete**. `last_updated` is set on insert and on Update.
+- Default qty_to_distribute is **bulk_order_qty**, else the current sized total.
+- **Apply** writes whole-garment qtys onto that line (`round(qty × percent / 100)`). Bulk is not binding; rounding may be off by a few. Empty grid applies immediately. If the line is already sized, a popup: **This product is already sized** — **Replace** (overwrite qty cells on the current subset), **Combine** (add derived qtys; add missing size/drop to the product subset when derived qty > 0), **Cancel** (default). After a successful Apply, close the panel.
+
+Do not require a scale to size a product. Do not require bulk to use a scale.

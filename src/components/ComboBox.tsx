@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 export type ComboOption = { id: string; label: string };
 
@@ -14,6 +14,16 @@ function matchId(options: ComboOption[], text: string) {
   const lower = t.toLocaleLowerCase("en");
   const ci = options.find((o) => o.label.toLocaleLowerCase("en") === lower);
   return ci?.id ?? null;
+}
+
+function firstMatch(options: ComboOption[], text: string) {
+  const t = text.trim().toLocaleLowerCase("en");
+  if (!t) return null;
+  return (
+    options.find((o) => o.label.toLocaleLowerCase("en") === t) ??
+    options.find((o) => o.label.toLocaleLowerCase("en").includes(t)) ??
+    null
+  );
 }
 
 function labelFor(options: ComboOption[], id: string) {
@@ -57,7 +67,11 @@ export function ComboBox({
   placeholder,
   className = "rounded border px-2 py-1",
   allowAny = false,
+  autoFocus = false,
   "aria-label": ariaLabel,
+  onKeyDown,
+  "data-col": dataCol,
+  "data-row": dataRow,
 }: {
   name?: string;
   options: ComboOption[];
@@ -69,7 +83,11 @@ export function ComboBox({
   placeholder?: string;
   className?: string;
   allowAny?: boolean;
+  autoFocus?: boolean;
   "aria-label"?: string;
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  "data-col"?: number | string;
+  "data-row"?: number | string;
 }) {
   const emptyOk = allowEmpty ?? !required;
   const listId = useId().replace(/:/g, "");
@@ -157,11 +175,14 @@ export function ComboBox({
         ref={inputRef}
         list={listId}
         value={text}
+        autoFocus={autoFocus}
         placeholder={placeholder}
         aria-label={ariaLabel}
         aria-invalid={invalid}
         data-combo-invalid={invalid ? "" : undefined}
         autoComplete="off"
+        data-col={dataCol}
+        data-row={dataRow}
         className={className}
         required={required && !emptyOk}
         onChange={(e) => {
@@ -173,6 +194,25 @@ export function ComboBox({
           else if (allowAny) apply(v);
           const msg = validityMessage(options, v, emptyOk, allowAny);
           e.target.setCustomValidity(msg);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const hit = firstMatch(options, e.currentTarget.value);
+            if (hit) {
+              apply(hit.id);
+              e.currentTarget.value = hit.label;
+              setText(hit.label);
+              e.currentTarget.setCustomValidity("");
+            } else if (allowAny) {
+              apply(e.currentTarget.value);
+              e.currentTarget.setCustomValidity("");
+            } else if (!e.currentTarget.value.trim() && emptyOk) {
+              apply("");
+              e.currentTarget.setCustomValidity("");
+            }
+          }
+          onKeyDown?.(e);
         }}
         onBlur={(e) => {
           const msg = validityMessage(options, e.target.value, emptyOk, allowAny);

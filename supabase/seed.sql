@@ -58,7 +58,8 @@ on conflict do nothing;
 
 insert into public.brands (id, name) values
   ('b0000000-0000-0000-0000-000000000001', 'BRAVO UOMO'),
-  ('b0000000-0000-0000-0000-000000000002', 'HARBOR & CO')
+  ('b0000000-0000-0000-0000-000000000002', 'HARBOR & CO'),
+  ('b0000000-0000-0000-0000-000000000003', 'MANTONI')
 on conflict do nothing;
 
 insert into public.items (id, name, default_size_chart_id) values
@@ -150,13 +151,31 @@ insert into public.vendors (id, name, notes) values
   ('v0000000-0000-0000-0000-000000000001', 'Milano mills', 'Jacket mill')
 on conflict do nothing;
 
-insert into public.cutting_orders (id, vendor_id, arrival_date, reference, status, notes) values
-  ('c0000000-0000-0000-0000-000000000001', 'v0000000-0000-0000-0000-000000000001', current_date + 14, 'CO-1001', 'open', 'Spring fill-in')
+insert into public.cutting_orders (id, vendor_id, brand_id, arrival_date, date_submitted, reference, status, notes) values
+  ('c0000000-0000-0000-0000-000000000001', 'v0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', current_date + 14, current_date - (3 + floor(random() * 18))::int, 'CO-1001', true, 'Spring fill-in')
+on conflict do nothing;
+
+insert into public.cutting_order_lots (cutting_order_id, lot_id) values
+  ('c0000000-0000-0000-0000-000000000001', 'l0000000-0000-0000-0000-000000000001'),
+  ('c0000000-0000-0000-0000-000000000001', 'l0000000-0000-0000-0000-000000000002')
 on conflict do nothing;
 
 insert into public.cutting_order_products (cutting_order_id, product_id, status) values
-  ('c0000000-0000-0000-0000-000000000001', 'p0000000-0000-0000-0000-000000000001', 'open'),
-  ('c0000000-0000-0000-0000-000000000001', 'p0000000-0000-0000-0000-000000000002', 'complete')
+  ('c0000000-0000-0000-0000-000000000001', 'p0000000-0000-0000-0000-000000000001', true),
+  ('c0000000-0000-0000-0000-000000000001', 'p0000000-0000-0000-0000-000000000002', false)
+on conflict do nothing;
+
+insert into public.size_drop_scales (id, name, brand_id, item_id, size_chart_id, last_updated) values
+  ('sc000000-0000-0000-0000-000000000001', 'Jacket fill-in', 'b0000000-0000-0000-0000-000000000001', 'i0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', '2025-03-18'),
+  ('sc000000-0000-0000-0000-000000000002', 'Jacket close-out', 'b0000000-0000-0000-0000-000000000001', 'i0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', '2026-01-09')
+on conflict do nothing;
+
+insert into public.size_drop_scale_cells (scale_id, size_id, drop_id, percent) values
+  ('sc000000-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000040', '11111111-dddd-0000-0000-000000000002', 40),
+  ('sc000000-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000042', '11111111-dddd-0000-0000-000000000002', 60),
+  ('sc000000-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000038', '11111111-dddd-0000-0000-000000000002', 25),
+  ('sc000000-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000040', '11111111-dddd-0000-0000-000000000002', 50),
+  ('sc000000-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000042', '11111111-dddd-0000-0000-000000000002', 25)
 on conflict do nothing;
 
 insert into public.customers (id, company_name, account_number) values

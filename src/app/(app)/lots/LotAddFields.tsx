@@ -35,14 +35,16 @@ export function LotAddFields({
   colors,
   patterns,
   contents,
+  lockedBrandId,
 }: {
   lots: Sibling[];
   brands: { id: string; name: string }[];
   colors: Opt[];
   patterns: Opt[];
   contents: Opt[];
+  lockedBrandId?: string;
 }) {
-  const [brandId, setBrandId] = useState("");
+  const [brandId, setBrandId] = useState(lockedBrandId ?? "");
   const [colorId, setColorId] = useState("");
   const [patternId, setPatternId] = useState("");
   const [contentId, setContentId] = useState("");
@@ -57,7 +59,7 @@ export function LotAddFields({
       return article === needle && colorNum !== parsed.colorNum;
     });
     if (!match) return;
-    setBrandId(match.brand_id ?? "");
+    if (!lockedBrandId) setBrandId(match.brand_id ?? "");
     setPatternId(match.pattern_id ?? "");
     setContentId(match.content_id ?? "");
   }
@@ -71,14 +73,18 @@ export function LotAddFields({
         className="rounded border px-2 py-1"
         onChange={(e) => onLotChange(e.target.value)}
       />
-      <ComboBox
-        name="brand_id"
-        allowEmpty
-        placeholder="Brand"
-        value={brandId}
-        onChange={setBrandId}
-        options={brands.map((b) => ({ id: b.id, label: b.name }))}
-      />
+      {lockedBrandId ? (
+        <input type="hidden" name="brand_id" value={lockedBrandId} />
+      ) : (
+        <ComboBox
+          name="brand_id"
+          allowEmpty
+          placeholder="Brand"
+          value={brandId}
+          onChange={setBrandId}
+          options={brands.map((b) => ({ id: b.id, label: b.name }))}
+        />
+      )}
       <ComboBox
         name="color_id"
         allowEmpty

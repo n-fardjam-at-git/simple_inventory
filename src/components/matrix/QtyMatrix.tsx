@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { PriceInput } from "@/components/PriceInput";
 import { NumericInput } from "@/components/NumericInput";
 import { isNoDropAxis } from "@/lib/size-code";
@@ -101,7 +101,7 @@ function MoneyCell({
       data-col={col}
       data-row={row}
       aria-label={ariaLabel}
-      className="w-16 rounded border border-stone-400 bg-white px-1 py-0.5 text-right font-medium tabular-nums text-stone-900"
+      className="w-14 rounded border border-stone-400 bg-white px-1 py-0 text-right text-xs font-medium tabular-nums text-stone-900"
       onKeyDown={(e) => moveFocus(e, colCount, rowCount)}
     />
   );
@@ -115,6 +115,7 @@ export function QtyMatrix({
   namePrefix,
   compact = false,
   showTotals = false,
+  grandTotalExtra = null,
 }: {
   sizes: MatrixSize[];
   drops: MatrixDrop[];
@@ -123,6 +124,8 @@ export function QtyMatrix({
   namePrefix?: string;
   compact?: boolean;
   showTotals?: boolean;
+  /** Inventory only: sits above the grand total in that same column. */
+  grandTotalExtra?: ReactNode;
 }) {
   const sortedSizes = [...sizes].sort((a, b) => a.sort_order - b.sort_order);
   const sortedDrops = [...drops].sort((a, b) => a.sort_order - b.sort_order);
@@ -252,11 +255,22 @@ export function QtyMatrix({
         </tbody>
       </table>
       {showTotals ? (
-        <span
-          className={`inline-flex w-12 shrink-0 items-center justify-center border border-stone-200 bg-stone-50 font-semibold tabular-nums ${pad} ${compact ? "text-xs" : "text-sm"}`}
-        >
-          {grandTotal === 0 ? "" : grandTotal}
-        </span>
+        grandTotalExtra ? (
+          <div className="flex w-14 shrink-0 flex-col items-center justify-end gap-1">
+            {grandTotalExtra}
+            <span
+              className={`inline-flex w-full items-center justify-center border border-stone-200 bg-stone-50 font-semibold tabular-nums ${pad} ${compact ? "text-xs" : "text-sm"}`}
+            >
+              {grandTotal === 0 ? "" : grandTotal}
+            </span>
+          </div>
+        ) : (
+          <span
+            className={`inline-flex w-12 shrink-0 items-center justify-center border border-stone-200 bg-stone-50 font-semibold tabular-nums ${pad} ${compact ? "text-xs" : "text-sm"}`}
+          >
+            {grandTotal === 0 ? "" : grandTotal}
+          </span>
+        )
       ) : null}
     </div>
   );
@@ -277,14 +291,14 @@ export function UpchargeMatrix({
   const lookup = new Map(cells.map((c) => [`${c.size_id}:${c.drop_id}`, c]));
   return (
     <div className="overflow-x-auto" data-matrix-grid="">
-      <table className="border-collapse bg-white text-sm">
+      <table className="border-collapse bg-white text-xs">
         <thead>
           <tr>
-            <th className="border border-teal-300 bg-teal-100 px-2 py-1 text-left font-medium text-teal-900">
+            <th className="whitespace-nowrap border border-teal-300 bg-teal-100 px-1.5 py-0.5 text-left font-medium text-teal-900">
               $ extra
             </th>
             {sortedSizes.map((s) => (
-              <th key={s.id} className="border border-teal-300 bg-teal-100 px-3 py-1 text-center text-teal-900">
+              <th key={s.id} className="border border-teal-300 bg-teal-100 px-1.5 py-0.5 text-center text-teal-900">
                 {s.code}
               </th>
             ))}
@@ -293,14 +307,14 @@ export function UpchargeMatrix({
         <tbody>
           {sortedDrops.map((d, row) => (
             <tr key={d.id}>
-              <th className="border border-teal-300 bg-teal-50 px-2 py-1 text-left text-teal-900">
+              <th className="border border-teal-300 bg-teal-50 px-1.5 py-0.5 text-left text-teal-900">
                 {hideDrop ? "" : d.code}
               </th>
               {sortedSizes.map((s, col) => {
                 const cell = lookup.get(`${s.id}:${d.id}`);
                 const up = cell?.upcharge ?? 0;
                 return (
-                  <td key={s.id} className="border border-stone-400 bg-white px-1 py-1 text-right">
+                  <td key={s.id} className="border border-stone-400 bg-white px-0.5 py-0.5 text-right">
                     <MoneyCell
                       name={`up:${s.id}:${d.id}`}
                       defaultValue={blankZero(up)}

@@ -67,6 +67,18 @@ export function FitList<T>({
   const tooBig = useRef<number | null>(null);
   const history = useRef<number[]>([0]);
   const total = items.length;
+  const signature = items.map(getKey).join("\n");
+  const sigRef = useRef(signature);
+
+  useLayoutEffect(() => {
+    if (sigRef.current === signature) return;
+    sigRef.current = signature;
+    const next = startForResume(items, getKey, resumeId);
+    setStart(next);
+    setCount(8);
+    tooBig.current = null;
+    history.current = [next];
+  }, [signature, resumeId, items, getKey]);
 
   useLayoutEffect(() => {
     const el = rootRef.current;
@@ -116,7 +128,7 @@ export function FitList<T>({
     if (fits && count < remaining && tooBig.current !== count + 1) {
       if (available - used > 40) setCount(count + 1);
     }
-  }, [start, count, fillH, total]);
+  }, [start, count, fillH, total, signature]);
 
   useLayoutEffect(() => {
     if (!resumeId) return;
@@ -169,6 +181,12 @@ export function FitList<T>({
         initialEditId={resumeId}
         footer={
           <>
+            <FitListAddedSelect
+              items={items}
+              getKey={getKey}
+              resumeId={resumeId}
+              onRevealIndex={revealIndex}
+            />
             <FitListReveal
               items={items}
               getKey={getKey}
@@ -201,6 +219,38 @@ export function FitList<T>({
 
 function FitListRow({ row }: { row: ReactNode }) {
   return <>{row}</>;
+}
+
+function FitListAddedSelect<T>({
+  items,
+  getKey,
+  resumeId,
+  onRevealIndex,
+}: {
+  items: T[];
+  getKey: (item: T) => string;
+  resumeId?: string | null;
+  onRevealIndex: (index: number) => void;
+}) {
+  const { requestSelect } = useList();
+  const prevRef = useRef<string[] | null>(null);
+  const keys = items.map(getKey);
+  const signature = keys.join("\n");
+
+  useLayoutEffect(() => {
+    const prev = prevRef.current;
+    prevRef.current = keys;
+    if (prev === null) return;
+    const prevSet = new Set(prev);
+    const added = keys.filter((k) => !prevSet.has(k));
+    if (!added.length) return;
+    const id =
+      resumeId && added.includes(resumeId) ? resumeId : added[added.length - 1];
+    const i = keys.indexOf(id);
+    if (i >= 0) onRevealIndex(i);
+    requestSelect(id);
+  }, [signature]);
+  return null;
 }
 
 function FitListReveal<T>({

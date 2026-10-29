@@ -1,3 +1,4 @@
+import { DismissNote } from "@/components/DismissNote";
 import { requireRoles } from "@/lib/auth";
 import { PageTitle, Card } from "@/components/ui";
 import { NewProductForm } from "../../NewProductForm";
@@ -15,9 +16,9 @@ export default async function NewChargePage({
     <div>
       <PageTitle title="New charge" />
       {errorText ? (
-        <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <DismissNote className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {errorText}
-        </p>
+        </DismissNote>
       ) : null}
       <Card>
         <NewProductForm kind="charge" />

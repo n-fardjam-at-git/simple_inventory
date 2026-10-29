@@ -1,0 +1,12 @@
+---
+description: Dismiss an error or warning — a small × after the message clears that text only.
+alwaysApply: true
+---
+
+# Dismiss a note
+
+A red error or amber warning is a `DismissNote` (`src/components/DismissNote.tsx`). A small **×** sits just after the text. Clicking it clears that message and leaves the row, lot, or form as it is.
+
+- Pass `onDismiss` when the text is in state (`setErr(null)` and the same for other error state).
+- A server banner with no state hides itself when × is clicked.
+- Do not add × to data that is only colored red: price stage, Delete, the New button, an upcharge.

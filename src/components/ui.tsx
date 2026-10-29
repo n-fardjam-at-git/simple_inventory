@@ -1,3 +1,8 @@
+"use client";
+
+import { useFormStatus } from "react-dom";
+import { Busy } from "@/components/WorkingBeside";
+
 export function PageTitle({
   title,
   actions,
@@ -32,14 +37,27 @@ export function Card({
 
 export function Btn({
   children,
+  type,
+  disabled,
+  busy = false,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  /** Show Working… for a click that is not a form submit. */
+  busy?: boolean;
+}) {
+  const { pending } = useFormStatus();
+  const submit = type === undefined || type === "submit";
+  const on = busy || (submit && pending);
   return (
-    <button
-      className="rounded bg-stone-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-stone-800 disabled:opacity-50"
-      {...props}
-    >
-      {children}
-    </button>
+    <Busy on={on} side="right">
+      <button
+        type={type}
+        disabled={disabled || on}
+        className="rounded bg-stone-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-stone-800 disabled:opacity-50"
+        {...props}
+      >
+        {children}
+      </button>
+    </Busy>
   );
 }

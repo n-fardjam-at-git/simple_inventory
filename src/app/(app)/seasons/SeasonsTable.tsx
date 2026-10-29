@@ -1,5 +1,6 @@
 "use client";
 
+import { DismissNote } from "@/components/DismissNote";
 import { useState, useTransition } from "react";
 import { SelectableRow, RowButtons, useList, useListRow } from "@/components/list/ListTable";
 import { FitList } from "@/components/list/FitList";
@@ -29,7 +30,8 @@ export function SeasonsTable({ rows }: { rows: SeasonRow[] }) {
 function SeasonRowView({ row }: { row: SeasonRow }) {
   const [period, setPeriod] = useState(periodValue(row.start_season, row.is_combo));
   const [year, setYear] = useState(String(row.year));
-  const [pending, start] = useTransition();
+  const [, start] = useTransition();
+  const [job, setJob] = useState<null | "save" | "delete">(null);
   const [err, setErr] = useState<string | null>(null);
 
   const snapshot = {
@@ -41,15 +43,20 @@ function SeasonRowView({ row }: { row: SeasonRow }) {
   const list = useList();
   function persist() {
     return new Promise<boolean>((resolve) => {
+      setJob("save");
       start(async () => {
-        const message = await updateSeason(row.id, period, Number(year));
-        if (message) {
-          setErr(message);
-          resolve(false);
-        } else {
-          setErr(null);
-          list.finishEdit(row.id);
-          resolve(true);
+        try {
+          const message = await updateSeason(row.id, period, Number(year));
+          if (message) {
+            setErr(message);
+            resolve(false);
+          } else {
+            setErr(null);
+            list.finishEdit(row.id);
+            resolve(true);
+          }
+        } finally {
+          setJob(null);
         }
       });
     });
@@ -95,19 +102,25 @@ function SeasonRowView({ row }: { row: SeasonRow }) {
         <RowButtons
           editing={editing}
           dirty={dirty}
+          saving={job === "save"}
+          deleting={job === "delete"}
           onEdit={requestEdit}
           onSave={() => void persist()}
           onCancel={requestCancel}
           onDelete={() => {
             if (!confirm(`Delete ${row.season}?`)) return;
+            setJob("delete");
             start(async () => {
-              const message = await deleteSeason(row.id);
-              if (message) setErr(message);
+              try {
+                const message = await deleteSeason(row.id);
+                if (message) setErr(message);
+              } finally {
+                setJob(null);
+              }
             });
           }}
         />
-        {err ? <p className="text-xs text-red-700">{err}</p> : null}
-        {pending ? <p className="text-xs text-stone-400">Working…</p> : null}
+        {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
       </td>
     </SelectableRow>
   );

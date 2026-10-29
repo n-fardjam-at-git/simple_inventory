@@ -1,5 +1,6 @@
 "use client";
 
+import { DismissNote } from "@/components/DismissNote";
 import { useState, useTransition } from "react";
 import { SelectableRow, RowButtons, useList, useListRow } from "@/components/list/ListTable";
 import { FitList } from "@/components/list/FitList";
@@ -37,7 +38,8 @@ function ChartRow({ row }: { row: Row }) {
   const [sizes, setSizes] = useState(row.sizes);
   const [drops, setDrops] = useState(row.drops);
   const [preview, setPreview] = useState(false);
-  const [pending, start] = useTransition();
+  const [, start] = useTransition();
+  const [job, setJob] = useState<null | "save" | "delete">(null);
   const [err, setErr] = useState<string | null>(null);
 
   const snapshot = { name: row.name, sizes: row.sizes, drops: row.drops };
@@ -47,15 +49,20 @@ function ChartRow({ row }: { row: Row }) {
   const list = useList();
   function persist() {
     return new Promise<boolean>((resolve) => {
+      setJob("save");
       start(async () => {
-        const message = await updateChart(row.id, { name, sizes, drops });
-        if (message) {
-          setErr(message);
-          resolve(false);
-        } else {
-          setErr(null);
-          list.finishEdit(row.id);
-          resolve(true);
+        try {
+          const message = await updateChart(row.id, { name, sizes, drops });
+          if (message) {
+            setErr(message);
+            resolve(false);
+          } else {
+            setErr(null);
+            list.finishEdit(row.id);
+            resolve(true);
+          }
+        } finally {
+          setJob(null);
         }
       });
     });
@@ -127,19 +134,25 @@ function ChartRow({ row }: { row: Row }) {
         <RowButtons
           editing={editing}
           dirty={dirty}
+          saving={job === "save"}
+          deleting={job === "delete"}
           onEdit={requestEdit}
           onSave={() => void persist()}
           onCancel={requestCancel}
           onDelete={() => {
             if (!confirm(`Delete ${row.name}?`)) return;
+            setJob("delete");
             start(async () => {
-              const message = await deleteChart(row.id);
-              if (message) setErr(message);
+              try {
+                const message = await deleteChart(row.id);
+                if (message) setErr(message);
+              } finally {
+                setJob(null);
+              }
             });
           }}
         />
-        {err ? <p className="text-xs text-red-700">{err}</p> : null}
-        {pending ? <p className="text-xs text-stone-400">Working…</p> : null}
+        {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
       </td>
     </SelectableRow>
   );

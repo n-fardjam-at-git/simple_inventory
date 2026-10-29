@@ -1,0 +1,26 @@
+---
+description: Vendor-shipment print — letter 8.5×11 receiving report for one vendor shipment.
+alwaysApply: false
+---
+
+# Vendor-shipment print
+
+Reference: `src/app/(app)/vendor-shipments/[id]/print/` (print icon on a vendor-shipment row). Data: `src/lib/vendor-shipment-report.ts`. Shared page-count chrome: `src/components/print/PrintActions.tsx` (same as **cutting-order-print**).
+
+When the user says **vendor-shipment-print**, reuse this instead of a landscape PDF, a screenshot, or **cutting-order-print**.
+
+## Paper and chrome
+
+- US letter **portrait 8.5×11**, **0.5in** margins. New tab; Print / Close; auto-open the print dialog.
+- **Page 1:** company name centered, then **Shipment {n} · From {vendor} · {page} of {pages}**, then received date / air way / Open or Posted.
+- **Later pages:** the same Shipment / From header only (table `thead`) — not the company name. Do not show `0 of 0`. Count pages from letter-width layout, including jumps when a product block will not fit (`break-inside-avoid`).
+- No cutting/lot grouping. Lines **flow**. If a container splits, a thin **{name} Cutting {n}** line sits above the continuing matrix. Full header only where the container starts.
+
+## Body
+
+- Sort by **product name**, then **cutting number**.
+- One boxed container per shipment product line. Header: **{products.name} Cutting {n}**. Then that line’s **variable-size/drop-matrix** of **shipment** qty (`vendor_shipment_cells`): **all product sizes** (qty 0 is blank); drops only when they have qty. Row totals; grand total centered under the **Total** column (no Subtotal label). No qty: **No qty**. Tight vertical spacing (compact headers, matrix cells, gaps between boxes). The cutting-order report is not tightened.
+- Do not require size/drop qty for a product to appear.
+- Last sheet is a **Summary** page (`break-before: page`): one row per **item** (suits, tuxedos, pants, …) with the summed shipment qty, plus a total. Items with no name show as —. Same Shipment / From header as later pages.
+
+Do not switch this report to landscape unless asked.

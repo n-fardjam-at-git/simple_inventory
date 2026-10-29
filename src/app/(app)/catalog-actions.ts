@@ -48,6 +48,7 @@ export async function insertNamed(
       name: String(formData.get("name") ?? "").trim(),
     });
     revalidatePath("/lots");
+    revalidatePath("/cutting-orders");
     return;
   }
   if (table === "collections") {
@@ -62,6 +63,7 @@ export async function insertNamed(
       name: toSentenceCase(String(formData.get("name") ?? "").trim()),
     });
     revalidatePath("/lots");
+    revalidatePath("/cutting-orders");
     return;
   }
   await supabase.from("brands").insert({
@@ -122,10 +124,14 @@ export async function setIsActive(table: ActiveTable, id: string, formData: Form
     if ((count ?? 0) === 0) {
       await supabase.from(table).delete().eq("id", id);
       revalidatePath("/lots");
+      revalidatePath("/cutting-orders");
       return;
     }
   }
   await supabase.from(table).update({ is_active }).eq("id", id);
   revalidatePath(ACTIVE_PATHS[table]);
   if (table === "products") revalidatePath("/inventory");
+  if (table === "colors" || table === "patterns" || table === "contents") {
+    revalidatePath("/cutting-orders");
+  }
 }

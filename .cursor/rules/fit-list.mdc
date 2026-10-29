@@ -10,14 +10,16 @@ Shared UI in `src/components/list/ListTable.tsx` (`ListTable`, `SelectableRow`, 
 ## Format
 
 - One selected row at a time (click row to select; zebra + teal selected).
+- After rows are **inserted**: if **one** new row, select it; if **several**, select the **last one added**. Pagination reveals that row. First load of the list does not treat existing rows as added. If the parent knows insert order, pass `resumeId` of that last row so selection follows the add batch, not list sort.
 - Each data row is a **full border box** (not a shared underline). First cell indented.
 - Action buttons live in a **rounded bordered chip** in the **last column**.
-- Links such as **Settings** (merchandise → products setting page) sit in the column **before** the action chip. If Settings is opened from a row in **edit**, closing settings returns to `/products?edit=<id>` so that same row is selected and still in edit.
+- Merchandise **Edit** opens the product settings popup (row does not expand). Charges still edit inline.
 
 ## Editing
 
 - Only **one row** in edit mode.
 - In edit: **Cancel** always; **Save** only if dirty; **Edit** when not editing. **Delete** optional.
+- **Save** and **Delete** follow **Working…**: the label stays, Working… floats to the left, and another click is ignored until the write finishes.
 - Click another row while **clean** → leave edit and select (or start edit if they clicked Edit).
 - Click away while **dirty** → modal **Save** or **Cancel** (discard), then navigate.
 - `tryLeave(fn)` for pagination or other navigation with the same prompt.

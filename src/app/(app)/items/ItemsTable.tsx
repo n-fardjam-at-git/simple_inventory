@@ -1,5 +1,6 @@
 "use client";
 
+import { DismissNote } from "@/components/DismissNote";
 import { useState, useTransition } from "react";
 import { SelectableRow, RowButtons, useList, useListRow } from "@/components/list/ListTable";
 import { FitList } from "@/components/list/FitList";
@@ -44,7 +45,8 @@ function ItemRow({ row, charts }: { row: Row; charts: Chart[] }) {
   const [chartId, setChartId] = useState(row.default_size_chart_id ?? "");
   const [active, setActive] = useState(row.is_active);
   const [inSet, setInSet] = useState(row.in_set);
-  const [pending, start] = useTransition();
+  const [, start] = useTransition();
+  const [job, setJob] = useState<null | "save" | "delete">(null);
   const [err, setErr] = useState<string | null>(null);
 
   const snapshot = {
@@ -62,20 +64,25 @@ function ItemRow({ row, charts }: { row: Row; charts: Chart[] }) {
   const list = useList();
   function persist() {
     return new Promise<boolean>((resolve) => {
+      setJob("save");
       start(async () => {
-        const message = await updateItem(row.id, {
-          name,
-          default_size_chart_id: chartId || null,
-          is_active: active,
-          in_set: inSet,
-        });
-        if (message) {
-          setErr(message);
-          resolve(false);
-        } else {
-          setErr(null);
-          list.finishEdit(row.id);
-          resolve(true);
+        try {
+          const message = await updateItem(row.id, {
+            name,
+            default_size_chart_id: chartId || null,
+            is_active: active,
+            in_set: inSet,
+          });
+          if (message) {
+            setErr(message);
+            resolve(false);
+          } else {
+            setErr(null);
+            list.finishEdit(row.id);
+            resolve(true);
+          }
+        } finally {
+          setJob(null);
         }
       });
     });
@@ -157,19 +164,25 @@ function ItemRow({ row, charts }: { row: Row; charts: Chart[] }) {
         <RowButtons
           editing={editing}
           dirty={dirty}
+          saving={job === "save"}
+          deleting={job === "delete"}
           onEdit={requestEdit}
           onSave={() => void persist()}
           onCancel={requestCancel}
           onDelete={() => {
             if (!confirm(`Delete ${row.name}?`)) return;
+            setJob("delete");
             start(async () => {
-              const message = await deleteItem(row.id);
-              if (message) setErr(message);
+              try {
+                const message = await deleteItem(row.id);
+                if (message) setErr(message);
+              } finally {
+                setJob(null);
+              }
             });
           }}
         />
-        {err ? <p className="text-xs text-red-700">{err}</p> : null}
-        {pending ? <p className="text-xs text-stone-400">Working…</p> : null}
+        {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
       </td>
     </SelectableRow>
   );

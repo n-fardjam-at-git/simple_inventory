@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { cuttingStatusOpen } from "@/lib/cutting-order";
+import { productImageUrl } from "@/lib/product-images";
 
 export async function loadProductMatrix(productId: string) {
   const supabase = await createClient();
@@ -74,7 +76,7 @@ export async function loadInventoryBoards() {
   const { data: products } = await supabase
     .from("products")
     .select(
-      "id, type, name, is_active, availability, collection_id, collections ( name ), lots ( lot_no, article, color_num, brand_id, color_id, pattern_id, content_id, brands ( name ), colors ( name ), patterns ( name ), contents ( name ) ), models ( id, name, item_id, items ( name ) )",
+      "id, type, name, standard_price, price_stage, is_active, availability, collection_id, collections ( name ), lots ( lot_no, article, color_num, brand_id, color_id, pattern_id, content_id, brands ( name ), colors ( name ), patterns ( name ), contents ( name ) ), models ( id, name, item_id, items ( name ) )",
     )
     .eq("type", 1);
 
@@ -128,6 +130,48 @@ export async function loadInventoryBoards() {
     .from("product_price_upcharges")
     .select("product_id, size_id, drop_id, upcharge_amount")
     .in("product_id", ids);
+  const { data: imageRows } = await supabase
+    .from("product_images")
+    .select("product_id, src_path, thumb_path, sort_order")
+    .in("product_id", ids)
+    .order("sort_order");
+  const imagesByProduct = new Map<string, { src: string; thumb: string }[]>();
+  for (const row of imageRows ?? []) {
+    const src = productImageUrl(row.src_path);
+    if (!src) continue;
+    const list = imagesByProduct.get(row.product_id) ?? [];
+    list.push({ src, thumb: productImageUrl(row.thumb_path) || src });
+    imagesByProduct.set(row.product_id, list);
+  }
+
+  const { data: openLines } = await supabase
+    .from("cutting_order_products")
+    .select("product_id, status, cutting_orders ( order_num, arrival_date )")
+    .in("product_id", ids)
+    .eq("status", true);
+
+  const cuttingsByProduct = new Map<
+    string,
+    { orderNum: number; arrivalDate: string }[]
+  >();
+  for (const line of openLines ?? []) {
+    if (!cuttingStatusOpen(line.status)) continue;
+    const order = rel<{ order_num: number; arrival_date: string | null }>(
+      line.cutting_orders,
+    );
+    if (!order || order.order_num == null) continue;
+    const arrivalDate = order.arrival_date ? String(order.arrival_date).slice(0, 10) : "";
+    const list = cuttingsByProduct.get(line.product_id) ?? [];
+    if (list.some((c) => c.orderNum === order.order_num)) continue;
+    list.push({ orderNum: order.order_num, arrivalDate });
+    cuttingsByProduct.set(line.product_id, list);
+  }
+  for (const list of cuttingsByProduct.values()) {
+    list.sort(
+      (a, b) =>
+        a.arrivalDate.localeCompare(b.arrivalDate) || a.orderNum - b.orderNum,
+    );
+  }
 
   return ordered.map((product) => {
     const sizes = (pSizes ?? [])
@@ -179,6 +223,8 @@ export async function loadInventoryBoards() {
     return {
       productId: product.id,
       title: product.name ?? `${lot?.lot_no}>${model?.name}`,
+      standardPrice: Number(product.standard_price ?? 0),
+      priceStage: Number(product.price_stage ?? 1),
       subtitle: [one(lot?.brands), itemName, collection?.name ?? null]
         .filter(Boolean)
         .join(" • "),
@@ -196,6 +242,8 @@ export async function loadInventoryBoards() {
       sizes,
       drops,
       cells,
+      openCuttings: cuttingsByProduct.get(product.id) ?? [],
+      images: imagesByProduct.get(product.id) ?? [],
     };
   });
 }

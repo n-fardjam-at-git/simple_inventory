@@ -12,6 +12,7 @@ import {
   type RefObject,
 } from "react";
 import { reportInvalidCombo } from "@/components/ComboBox";
+import { WorkingBeside } from "@/components/WorkingBeside";
 
 type RowApi = {
   dirty: boolean;
@@ -248,7 +249,7 @@ export function SelectableRow({
   const { selectedId, editingId, requestSelect } = useList();
   function onClick(e: MouseEvent<HTMLTableRowElement>) {
     const t = e.target as HTMLElement;
-    if (t.closest("button, a, input, select, textarea, label")) return;
+    if (t.closest("button, a, input, select, textarea, label, details, summary")) return;
     if (selectedId === id) {
       if (editingId === id) return;
       requestSelect(null);
@@ -273,6 +274,8 @@ export function RowButtons({
   onSave,
   onCancel,
   onDelete,
+  saving = false,
+  deleting = false,
 }: {
   editing: boolean;
   dirty: boolean;
@@ -280,20 +283,28 @@ export function RowButtons({
   onSave: () => void;
   onCancel: () => void;
   onDelete?: () => void;
+  /** While saving, Working… floats beside Save and another click is ignored. */
+  saving?: boolean;
+  /** While deleting, Working… floats beside Delete and another click is ignored. */
+  deleting?: boolean;
 }) {
   return (
     <div className="inline-flex flex-wrap items-center gap-2 rounded-md border border-stone-300 bg-stone-50 px-2 py-1">
-      {editing && dirty ? (
-        <button
-          type="button"
-          className="text-xs font-medium text-teal-800 underline"
-          onClick={(e) => {
-            if (reportInvalidCombo((e.currentTarget as HTMLElement).closest("tr"))) return;
-            onSave();
-          }}
-        >
-          Save
-        </button>
+      {(editing && dirty) || saving ? (
+        <span className="relative">
+          <button
+            type="button"
+            className="text-xs font-medium text-teal-800 underline"
+            onClick={(e) => {
+              if (saving) return;
+              if (reportInvalidCombo((e.currentTarget as HTMLElement).closest("tr"))) return;
+              onSave();
+            }}
+          >
+            Save
+          </button>
+          {saving ? <WorkingBeside /> : null}
+        </span>
       ) : null}
       {editing ? (
         <button type="button" className="text-xs text-stone-700 underline" onClick={onCancel}>
@@ -305,10 +316,21 @@ export function RowButtons({
         </button>
       )}
       {onDelete ? (
-        <button type="button" className="text-xs text-red-700 underline" onClick={onDelete}>
-          Delete
-        </button>
+        <span className="relative">
+          <button
+            type="button"
+            className="text-xs text-red-700 underline"
+            onClick={() => {
+              if (deleting) return;
+              onDelete();
+            }}
+          >
+            Delete
+          </button>
+          {deleting ? <WorkingBeside /> : null}
+        </span>
       ) : null}
     </div>
   );
 }
+

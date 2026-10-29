@@ -1,0 +1,47 @@
+---
+description: Gruppo Bravo apparel domain — lot, article, mill, vendor, model, product, cutting order bulk vs sized.
+alwaysApply: true
+---
+
+# Apparel domain
+
+Use this language. Do not treat a **lot** as a garment or a **vendor** as a fabric mill.
+
+| Term | Meaning | In this app |
+| --- | --- | --- |
+| **Article** | A fabric style. | `lots.article` |
+| **Lot** | One particular textile fabric; a variant of an article (**article + color_num**). | `lots` (`lot_no`, `article`, `color_num`) |
+| **Mill** | Fabric producer. Lead time up to **~90 days** for a fabric order. | Not a table yet. Not `vendors`. |
+| **Model** | Detailed **shape** of a garment (belongs to an item). | `models` (`average_consumption`: optional fabric qty for one size/drop) |
+| **Product** | A **lot cut into a model**. Same lot + different models = different products. Photos are paths on `product_images`; the host is `PRODUCT_IMAGE_ORIGIN` (set per deploy). | `products` (merchandise: `lot_id` + `model_id`) |
+| **Size / drop** | Variants of a **product**. | Product size/drop subset + qty cells |
+| **Vendor** | Clothing **factory** that cuts garments. Usually orders the fabric needed for a cutting order. | `vendors`; `cutting_orders.vendor_id` |
+
+## Cutting orders
+
+Order of work: create `cutting_orders` → add fabrics to `cutting_order_lots` → add `cutting_order_products` for the **selected lot**. A product’s lot must already be on the order.
+
+Because mill lead time is long, a cutting order is often sent to the factory **before** size/drop breakdown exists:
+
+1. **Bulk order** (optional): first transmission — **total qty per product**, no sizes/drops. Stored as nullable `cutting_order_products.bulk_order_qty`. Null means there was no bulk send; the line may be sized only.
+2. **Sized order** (what the qty grid does today): later (or only) transmission — **variable-size/drop-matrix** on `cutting_order_products`.
+
+Bulk qty is **not binding**. The sized grid total may be higher or lower; do not constrain or overwrite one from the other.
+
+A **size/drop scale** (`size_drop_scales`) is a reusable **percent mix** for sizing. Optional. **Apply** uses a working **qty_to_distribute** (not stored on the scale). See **scale-panel**.
+
+Do not require size/drop qty in order to have a product on a cutting order. Do not invent mill tables or bulk-order UI until asked.
+
+A vendor login can open **Cutting orders** (`/vendor-cuttings`) read-only: only that factory’s cuttings with a **submit date**. The panel shows each product’s ordered size/drop qty. **Print** opens **cutting-order-print**. A docked filter limits the list by cutting number, open/closed, and submit-date range. Cutting No is a Combo Box of this factory’s submitted cuttings only. **Find** jumps to the picked cutting when it is in the current list. Staff keep `/cutting-orders`.
+
+## Vendor shipments (receiving)
+
+Goods the **vendor** ships to us. One airway bill can include **several cuttings**. The same **product** may appear once per cutting on that shipment.
+
+1. `vendor_shipments` — `shipment_num` (serial), `vendor_id` (factory), `received_date`, `air_way_no`, `posted` (add to inventory). Do not change vendor once the shipment has product lines.
+2. `vendor_shipment_products` — `cutting_order_id` + `product_id` (must already be on that cutting). Unique `(shipment, cutting, product)`.
+3. `vendor_shipment_cells` — size/drop qty. **Post** adds to `inventory` and to `cutting_quantities.qty_received`. Refuse the whole post (no writes) if any line’s cutting is closed or that cutting product is Complete. No unpost unless asked. After `qty_received` changes, if that product’s sized **received ≥ ordered** (and ordered > 0), `cutting_order_products.status` becomes Complete. Does not auto-reopen. The existing product-status rollup still closes the cutting order when no products remain Open.
+
+## Vendor advice
+
+The UI calls this a **vendor packing list**. The tables stay `vendor_advices`, `vendor_advice_products`, and `vendor_advice_cells` (draft → submitted). Not a vendor shipment. Staff **Accept** copies it into an unposted `vendor_shipments` row. **Return** sets it back to draft. Accept and return do not post inventory or change `qty_received`. See **vendor-advice**.

@@ -1,0 +1,23 @@
+---
+description: Shipment Details Panel — right slide-over for a vendor shipment. Apply when the user says shipment-details-panel.
+alwaysApply: false
+---
+
+# Shipment Details Panel
+
+Reference: `src/app/(app)/vendor-shipments/ShipmentDetailsPanel.tsx` (opens from the open-folder icon on the vendor-shipments Fit List).
+
+When the user says **shipment-details-panel**, reuse this instead of a modal, a new page, or **order-details-panel**.
+
+## Chrome
+
+- Same dock as **order-details-panel**: right **95%**, below the header, transparent overlay, drop shadow, × / overlay / Escape.
+- Starts **closed**. Open folder on the shipment row (closed at rest, open tray on hover). Hidden while that row is in edit. Print icon opens **vendor-shipment-print**.
+- Title is the serial **shipment_num**. Subtitle is the **vendor** name.
+- The vendor-shipments Fit List is the **grandparent** header only (no cuttings or products columns). There is no `shipment_cuttings` table. In **view** mode, rows have **sys_image** **Post** (`public/sys_image/post.svg`, confirm, then `post_vendor_shipment`: inventory + `qty_received`). **Post** aborts with an error if any line is on a closed cutting or a Complete product. Post is **disabled** (not hidden) when already posted or the shipment has no products. Post and Open are hidden while that row is in **edit**. No unpost.
+
+## Body
+
+- One **cutting-view Fit List** from SQL view `vendor_shipment_cutting_view`: distinct **cutting + product** rows on `vendor_shipment_products`. Each row is Cutting, Product, **variable-size/drop-matrix** (`vendor_shipment_cells`), Edit/Save/Cancel/Delete. One line = one matrix (not a second products list).
+- **Add** under the list: Cutting Combo of **open** cuttings for this shipment’s vendor. **Add** (needs a cutting) opens a popup Fit List of **open** products on that cutting that are not already on the shipment. Rows have checkboxes; header checkbox selects all; popup **Add** inserts the checked lines into `vendor_shipment_products` and seeds `vendor_shipment_cells` with remaining cutting qty (`qty_ordered − qty_received`, floored at 0; skip zeros). **Cancel** / Escape / overlay / × close with no insert. After insert or delete, refresh the cutting-view.
+- Unique `(shipment, cutting, product)`. Posted: view only (no add/delete/edit).

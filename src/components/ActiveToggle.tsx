@@ -1,4 +1,8 @@
+"use client";
+
+import { useFormStatus } from "react-dom";
 import { setIsActive } from "@/app/(app)/catalog-actions";
+import { Busy } from "@/components/WorkingBeside";
 
 type ActiveTable =
   | "products"
@@ -25,9 +29,18 @@ export function ActiveToggle({
   return (
     <form action={setIsActive.bind(null, table, id)}>
       <input type="hidden" name="is_active" value={isActive ? "false" : "true"} />
-      <button type="submit" className="text-xs text-stone-600 underline">
-        {isActive ? "Deactivate" : "Activate"}
-      </button>
+      <ActiveSubmit label={isActive ? "Deactivate" : "Activate"} />
     </form>
+  );
+}
+
+function ActiveSubmit({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <Busy on={pending}>
+      <button type="submit" disabled={pending} className="text-xs text-stone-600 underline disabled:opacity-50">
+        {label}
+      </button>
+    </Busy>
   );
 }

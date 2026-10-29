@@ -1,0 +1,25 @@
+---
+description: Cutting-order print — letter 8.5×11 factory report for one cutting order.
+alwaysApply: false
+---
+
+# Cutting-order print
+
+Reference: `src/app/(app)/cutting-orders/[id]/print/` (print icon on a cutting-order row, and on a vendor’s submitted cutting). Data: `src/lib/cutting-order-report.ts`. Page-count chrome: `src/components/print/PrintActions.tsx`. A vendor can open it only for their own cutting that has a submit date.
+
+When the user says **cutting-order-print**, reuse this instead of a landscape PDF, a screenshot, or a new report layout.
+
+## Paper and chrome
+
+- US letter **portrait 8.5×11**, **0.5in** margins. New tab; Print / Close; auto-open the print dialog.
+- **Page 1:** company name centered, then **Cutting {n} · To {vendor} · {page} of {pages}**, then brand / date / PO.
+- **Later pages:** the same Cutting / To header only (table `thead`) — not the company name. Do not show `0 of 0`. Count pages from letter-width layout, including jumps when a product block will not fit the leftover space (`break-inside-avoid` on a model + matrix).
+- Do not put each article on its own sheet. Groups **flow**; a group may split. The group bar is **{lot_no}** once. Do not print Article, and do not print the article or color beside it. The repeating row under that bar is empty so the lot number cannot show twice. Tight vertical spacing.
+
+## Body
+
+- One boxed group per **lot** on the order. Label **{lot_no}** once. When `lots.mill_article` is set, append **• {mill_article}** in a thin font on that same bar. Shade the group bar and matrix size/drop headers (`print-color-adjust: exact`).
+- Every **product** on that lot: model, item, instructions. Sized lines use the **variable-size/drop-matrix** as a full-width table: **all product sizes** (qty 0 is blank, not omitted); drops only when they have qty. Row totals; grand total centered under the **Total** column (no Subtotal label). Bulk-only: **Bulk • {qty}**. Unsized, no bulk: **Not sized**.
+- Do not require size/drop qty for a product to appear.
+
+Do not switch this report to landscape unless asked.

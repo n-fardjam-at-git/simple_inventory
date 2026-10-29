@@ -1,3 +1,4 @@
+import { DismissNote } from "@/components/DismissNote";
 import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/auth";
 import { loadProductMatrix } from "@/lib/products";
@@ -64,9 +65,9 @@ export default async function CustomerShipmentDetail({
     <div className="space-y-6">
       <PageTitle title={`Shipment · ${customer?.company_name ?? ""}`} />
       {error ? (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <DismissNote className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {decodeURIComponent(error)}
-        </p>
+        </DismissNote>
       ) : null}
       <p className="text-sm text-stone-600">
         Sage {customer?.account_number ?? "—"} · {shipment?.shipping_date} ·{" "}

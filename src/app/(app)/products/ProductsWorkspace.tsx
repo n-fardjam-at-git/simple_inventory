@@ -9,6 +9,7 @@ import { PRICE_STAGE, priceStageLabel, productTitle } from "@/lib/product-type";
 import { DockedFilterPanel, filterToggleClass } from "@/components/filter/DockedFilterPanel";
 import { FilterClear } from "@/components/filter/FilterClear";
 import { ProductsTable, type Row } from "./ProductsTable";
+import type { ProductTemplateOption } from "./SaveAsTemplatePopup";
 
 type Opt = { id: string; name: string; is_active?: boolean };
 
@@ -82,6 +83,7 @@ export function ProductsWorkspace({
   patterns,
   contents,
   resumeId,
+  templates = [],
 }: {
   rows: Row[];
   canEdit: boolean;
@@ -94,6 +96,7 @@ export function ProductsWorkspace({
   patterns: Opt[];
   contents: Opt[];
   resumeId: string | null;
+  templates?: ProductTemplateOption[];
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Filters>(EMPTY);
@@ -340,6 +343,7 @@ export function ProductsWorkspace({
           resumeId={resumeId}
           focusId={focusId}
           focusNonce={focusNonce}
+          templates={templates}
         />
       )}
     </>

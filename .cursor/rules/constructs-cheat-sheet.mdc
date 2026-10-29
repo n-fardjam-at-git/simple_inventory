@@ -1,0 +1,29 @@
+---
+description: Saved UI constructs cheat sheet. Apply when the user asks for the cheat sheet, saved constructs, or a list of named patterns to reuse.
+alwaysApply: false
+---
+
+# Saved constructs cheat sheet
+
+When the user asks for this sheet, **print it in the reply** (do not only follow it silently). Say the **name** in the left column to reuse that construct.
+
+| Name | What it is |
+| --- | --- |
+| **Fit List** | Selectable catalog list: one selected row, single-row edit, dirty leave prompt, bordered rows, boxed Edit/Save/Cancel/Delete. After insert: select the new row, or the last row if several were added. Paged variant fits as many rows as the viewport. |
+| **Working…** | Floats beside the button that is writing to the database. Label stays; another click is ignored until the write finishes. Left of list-row Save/Delete; right of left-aligned Add/Create. Not on Filter, Reset, Cancel, Open, or print. |
+| **Combo Box** | Native type-to-filter picker (`input` + `datalist`). Catalogs use this; short closed lists stay `<select>`. |
+| **docked-filter-panel** | Left 30% slide-over filter for a paged Fit List (Filter / Reset). Lots, products, inventory. |
+| **order-details-panel** | Right 95% slide-over for a cutting order (Open). Left: lots Fit List. Right: **add-product** + products for the selected lot. |
+| **add-product** | Header + equal-width item buttons (**Any** + first 14 `in_set` items). Popup Combo under the button filters by brand and item (**Any** = brand only) and inserts a product line. |
+| **variable-size/drop-matrix** | Sparse qty grid: one drop row at a time, Combo for unused drops, ↓ / ×. Not the dense inventory matrix. |
+| **products setting page** | Merchandise **Edit** popup on the products Fit List (selling, size/drop subset, size upcharges, photo gallery). Not a separate `/products/[id]` Settings screen. |
+| **product-size-drop-subset** | Add sizes/drops freely; do not remove a size or drop while it has on-hand qty. Same lock later for customer orders. |
+| **scale-panel** | Right nested dock over order details. Fit List of size/drop **percentage** scales for the product line that opened it (brand + item + chart). Add samples the saved grid; Apply writes qtys from **qty_to_distribute**. |
+| **copy-list** | In-memory sized-qty clipboard for one open cutting order. **Copy** on a product row opens a popup Fit List; Copy/Clear on top; Paste/Delete on rows. Paste only when item + size chart match. Already sized: Replace / Combine / Cancel. Not persisted. |
+| **cutting-order-print** | Letter **8.5×11** portrait factory report for one cutting order (print icon → `/cutting-orders/[id]/print`). Company on page 1; **Cutting · To · n of n** on every page; lots as **Article** groups with full-width matrices. |
+| **vendor-shipment-print** | Letter **8.5×11** portrait receiving report for one vendor shipment (print icon → `/vendor-shipments/[id]/print`). Company on page 1; **Shipment · From · n of n**; no groups — one boxed matrix per line, sorted by product name then cutting, header **{name} Cutting {n}**. |
+| **shipment-details-panel** | Right 95% slide-over for a vendor shipment (Open). One **cutting-view** Fit List (SQL view of distinct cutting + product on `vendor_shipment_products`) with the **variable-size/drop-matrix** in each row. Add = open cutting Combo, then a popup Fit List of open products on that cutting (checkboxes, Add/Cancel). Header Fit List stays shipment-only. |
+| **vendor cuttings** | Vendor read-only Fit List of their cuttings that have a submit date (`/vendor-cuttings`). Open shows each product’s ordered size/drop qty. Print opens **cutting-order-print**. Docked filter: Cutting No Combo Box (this factory’s cuttings only) with Find, status, and submit dates. Not the staff cutting-order page. |
+| **vendor-advice** | Factory packing list, separate from vendor shipments. UI name: **Vendor packing lists** (`/vendor-advices`). Tables stay `vendor_advices`. Vendor Fit List + Open panel (cutting Combo, product popup, size/drop matrix). Staff Accept copies a submitted list into an unposted shipment; Return sends it back to draft. Admin and warehouse nav badge counts submitted lists (hidden at 0). Users page assigns the login’s vendor. |
+
+Do not invent a new control when one of these names applies. After adding a new named construct, add a row here.

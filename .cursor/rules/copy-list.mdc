@@ -1,0 +1,22 @@
+---
+description: Copy list — in-memory sized-qty clipboard popup for products on the same cutting order.
+alwaysApply: false
+---
+
+# Copy list
+
+Reference: `src/app/(app)/cutting-orders/QtyCopyPopup.tsx` (opens from **Copy** on an order-products Fit List row).
+
+When the user says **copy-list**, reuse this instead of a persisted table or the OS clipboard.
+
+## What a copy is
+
+A session snapshot of one product line’s **saved** size/drop qty cells, plus **item**, **size chart**, and the size/drop subset needed to draw the grid. Copies live in memory while the **order-details-panel** is open for that order. They are cleared when the panel closes or another order is opened. They are not saved across refresh.
+
+## Chrome
+
+- Popup over the order (portal). Title **Copy • {model}**. Escape / overlay / × close the popup (copies stay).
+- Top of the list: **Copy** (samples the opening line; hide if that grid is empty) and **Clear** (empties the list).
+- Fit List of copies: **item**, size/drop matrix, **total**, **Paste** + **Delete**.
+- **Paste** only when the copy’s item and size chart match the opening line. Hide Paste otherwise.
+- Empty target grid pastes immediately (replace). If the line is already sized: **This product is already sized** — **Replace**, **Combine** (same as scale-panel: add qtys; add missing size/drop to the product subset), **Cancel**. After a successful Paste, close the popup. Copies stay until the order panel closes.

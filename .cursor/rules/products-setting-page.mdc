@@ -1,14 +1,16 @@
 ---
-description: Products setting page — merchandise product detail at /products/[id], opened from Settings on the merchandise Fit List. Apply when the user says products setting page or product settings.
+description: Products setting page — merchandise Edit popup on the Fit List. Apply when the user says products setting page or product settings.
 alwaysApply: false
 ---
 
 # Products setting page
 
-Route: `src/app/(app)/products/[id]/page.tsx` (`/products/[id]`).
+Merchandise **Edit** on `/products` opens a compact popup (`ProductEditPopup`): selling fields, size/drop subset (on-hand lock), size upcharges, photos, Save as template. The Fit List row stays one line. There is no Settings column.
 
-Opened from the merchandise Fit List via the **Settings** link (not from Charges & freight).
+**Photos** for the product sit in a panel to the left of the edit card: thumbnails stacked vertically, large image beneath. **Search** on the Photos panel opens a photo-site popup. Click pictures, then **Select** adds them or **Cancel** closes with no change. **Remove** drops one from the panel. Either change shows **Save** on the edit card; nothing is written until that Save. Cancel on the edit card leaves the stored photos unchanged. The database stores the path on `product_images`. The host is `PRODUCT_IMAGE_ORIGIN`, set per deploy. Inventory shows one thumbnail in each row, in the same column as the grand total and above that number. Hovering it floats a larger copy of the full photo over the size grid; the row does not move. A click opens a view-only photo window: larger thumbnails in a panel on the left, the large image beside them. The size grid stays in the row.
 
-This is the per-product settings screen: line price, size×drop subset, size upcharges. It is not the Products Fit List (`/products`) and not Inventory.
+Charges & freight still edit inline on their Fit List.
 
-When the user says **products setting page**, change this route—not the list.
+`/products/[id]` is leftover (alerts). Do not add Fit List Settings links back.
+
+When the user says **products setting page** or product settings, change this popup—not a new route.
