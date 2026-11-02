@@ -29,7 +29,7 @@ export default async function CustomerShipmentDetail({
   const { data: shipment } = await supabase
     .from("customer_shipments")
     .select(
-      "*, customers ( company_name, account_number ), customer_addresses ( label, address_line1, city, address_type )",
+      "*, customers ( account_no, company_name, account_number ), customer_addresses ( location_name, address_line1, city, address_type )",
     )
     .eq("id", id)
     .single();
@@ -46,10 +46,11 @@ export default async function CustomerShipmentDetail({
   const locked = shipment?.status !== "open";
   const customer = shipment?.customers as unknown as {
     company_name: string;
+    account_no: number;
     account_number: string | null;
   };
   const addr = shipment?.customer_addresses as unknown as {
-    label: string;
+    location_name: string;
     address_line1: string;
     city: string;
     address_type: string;
@@ -70,8 +71,8 @@ export default async function CustomerShipmentDetail({
         </DismissNote>
       ) : null}
       <p className="text-sm text-stone-600">
-        Sage {customer?.account_number ?? "—"} · {shipment?.shipping_date} ·{" "}
-        {addr ? `${addr.label ?? addr.address_type}: ${addr.address_line1}, ${addr.city}` : "no ship-to"}{" "}
+        Account {customer?.account_no ?? "—"} · Sage {customer?.account_number ?? "—"} · {shipment?.shipping_date} ·{" "}
+        {addr ? `${addr.location_name ?? addr.address_type}: ${addr.address_line1}, ${addr.city}` : "no ship-to"}{" "}
         · {shipment?.status}
       </p>
       {!locked ? (

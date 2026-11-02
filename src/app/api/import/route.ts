@@ -75,7 +75,11 @@ export async function POST(req: Request) {
       } else {
         const { data, error } = await supabase
           .from("customers")
-          .insert({ company_name: name || "Imported", account_number: sage })
+          .insert({
+            company_name: name || "Imported",
+            business_name: name || "Imported",
+            account_number: sage,
+          })
           .select("id")
           .single();
         if (error) failed.push({ row: i + 2, reason: error.message });
@@ -115,7 +119,7 @@ export async function POST(req: Request) {
       const { error } = await supabase.from("customer_addresses").insert({
         customer_id: customer.id,
         address_type,
-        label: row.label || null,
+        location_name: row.location_name || null,
         address_line1: row.address_line1 || null,
         address_line2: row.address_line2 || null,
         city: row.city || null,

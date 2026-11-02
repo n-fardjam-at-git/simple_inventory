@@ -107,6 +107,39 @@ export function SysPost({ className }: { className?: string }) {
   );
 }
 
+export function SysStop({ className }: { className?: string }) {
+  return (
+    <svg
+      className={`block h-[56px] w-[56px] shrink-0 drop-shadow ${className ?? ""}`}
+      viewBox="0 0 56 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Do not ship"
+    >
+      <path d="M18.5 6H37.5L50 18.5V37.5L37.5 50H18.5L6 37.5V18.5L18.5 6Z" fill="#DC2626" />
+      <path
+        d="M19.3 8.5H36.7L47.5 19.3V36.7L36.7 47.5H19.3L8.5 36.7V19.3L19.3 8.5Z"
+        stroke="#FFFFFF"
+        strokeWidth="2.5"
+        fill="none"
+      />
+      <text
+        x="28"
+        y="33"
+        fill="#FFFFFF"
+        fontFamily="system-ui, -apple-system, sans-serif"
+        fontWeight="800"
+        fontSize="13"
+        letterSpacing="1"
+        textAnchor="middle"
+      >
+        STOP
+      </text>
+    </svg>
+  );
+}
+
 export function SysFolder({ className }: { className?: string }) {
   return (
     <SysImage className={className}>

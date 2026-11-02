@@ -2,6 +2,7 @@
 
 import { Btn } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
+import { addressPickLabel, customerPickLabel } from "@/lib/customer";
 import { createShipment } from "./actions";
 import { useMemo, useState } from "react";
 
@@ -9,8 +10,15 @@ export function NewShipmentForm({
   customers,
   addresses,
 }: {
-  customers: { id: string; company_name: string; account_number: string | null }[];
-  addresses: { id: string; customer_id: string; address_type: string; label: string | null; city: string | null }[];
+  customers: { id: string; account_no: number; company_name: string; account_number: string | null }[];
+  addresses: {
+    id: string;
+    customer_id: string;
+    address_type: string;
+    location_name: string | null;
+    city: string | null;
+    address_line1: string | null;
+  }[];
 }) {
   const [customerId, setCustomerId] = useState("");
   const addrOpts = useMemo(
@@ -19,7 +27,7 @@ export function NewShipmentForm({
         .filter((a) => a.customer_id === customerId)
         .map((a) => ({
           id: a.id,
-          label: `${a.label ?? a.address_type} · ${a.city ?? ""}`.trim(),
+          label: addressPickLabel(a),
         })),
     [addresses, customerId],
   );
@@ -34,7 +42,7 @@ export function NewShipmentForm({
         onChange={setCustomerId}
         options={customers.map((c) => ({
           id: c.id,
-          label: c.account_number ? `${c.company_name} (${c.account_number})` : c.company_name,
+          label: customerPickLabel(c),
         }))}
       />
       <ComboBox

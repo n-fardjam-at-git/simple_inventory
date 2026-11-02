@@ -22,15 +22,3 @@ export async function saveCompany(formData: FormData) {
     .eq("id", "00000000-0000-0000-0000-000000000001");
   revalidatePath("/settings/company");
 }
-
-export async function addContact(formData: FormData) {
-  const supabase = await createClient();
-  await supabase.from("company_contacts").insert({
-    company_profile_id: "00000000-0000-0000-0000-000000000001",
-    kind: String(formData.get("kind")),
-    label: String(formData.get("label")),
-    value: String(formData.get("value")),
-    is_primary: formData.get("is_primary") === "on",
-  });
-  revalidatePath("/settings/company");
-}

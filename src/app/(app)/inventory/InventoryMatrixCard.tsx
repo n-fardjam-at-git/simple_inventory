@@ -17,6 +17,7 @@ export type InventoryBoard = {
   fabric: string;
   isActive: boolean;
   availability: string | null;
+  location: string | null;
   collectionId: string | null;
   brandId: string | null;
   lotNo: string | null;
@@ -41,6 +42,7 @@ export function InventoryMatrixCard({
   fabric,
   isActive,
   availability,
+  location,
   sizes,
   drops,
   cells,
@@ -116,6 +118,21 @@ export function InventoryMatrixCard({
           </span>
         </div>
         <p className="text-xs leading-tight text-stone-500">{subtitle}</p>
+        {editing ? (
+          <input
+            key={formKey}
+            name="location"
+            form={`inv-${productId}`}
+            defaultValue={location ?? ""}
+            placeholder="Aisle or note"
+            aria-label="Location"
+            maxLength={200}
+            className="mt-1 w-full rounded border border-stone-300 px-1 py-0.5 text-xs"
+            onChange={() => setDirty(true)}
+          />
+        ) : location ? (
+          <p className="text-xs leading-tight text-stone-800">{location}</p>
+        ) : null}
         <p className="text-xs font-light leading-tight text-stone-500">
           {fabric ? `${fabric}. ` : ""}
           {isActive ? "Active" : "Inactive"}

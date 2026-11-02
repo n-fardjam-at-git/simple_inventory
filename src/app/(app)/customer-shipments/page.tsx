@@ -9,15 +9,15 @@ export default async function CustomerShipmentsPage() {
   const supabase = await createClient();
   const { data: shipments } = await supabase
     .from("customer_shipments")
-    .select("id, shipping_date, status, customers ( company_name, account_number )")
+    .select("id, shipping_date, status, customers ( account_no, company_name, account_number )")
     .order("shipping_date", { ascending: false });
   const { data: customers } = await supabase
     .from("customers")
-    .select("id, company_name, account_number")
+    .select("id, account_no, company_name, account_number")
     .eq("is_active", true);
   const { data: addresses } = await supabase
     .from("customer_addresses")
-    .select("id, customer_id, address_type, label, city")
+    .select("id, customer_id, address_type, location_name, city, address_line1")
     .in("address_type", ["shipping", "both"]);
 
   return (
@@ -28,6 +28,7 @@ export default async function CustomerShipmentsPage() {
           <thead>
             <tr className="text-stone-500">
               <th className="py-1">Customer</th>
+              <th>Account</th>
               <th>Sage</th>
               <th>Date</th>
               <th>Status</th>
@@ -36,6 +37,7 @@ export default async function CustomerShipmentsPage() {
           <tbody>
             {(shipments ?? []).map((s) => {
               const c = s.customers as unknown as {
+                account_no: number;
                 company_name: string;
                 account_number: string | null;
               };
@@ -46,6 +48,7 @@ export default async function CustomerShipmentsPage() {
                       {c?.company_name}
                     </Link>
                   </td>
+                  <td className="tabular-nums">{c?.account_no ?? "—"}</td>
                   <td>{c?.account_number ?? "—"}</td>
                   <td>{s.shipping_date}</td>
                   <td>{s.status}</td>

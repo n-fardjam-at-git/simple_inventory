@@ -76,7 +76,7 @@ export async function loadInventoryBoards() {
   const { data: products } = await supabase
     .from("products")
     .select(
-      "id, type, name, standard_price, price_stage, is_active, availability, collection_id, collections ( name ), lots ( lot_no, article, color_num, brand_id, color_id, pattern_id, content_id, brands ( name ), colors ( name ), patterns ( name ), contents ( name ) ), models ( id, name, item_id, items ( name ) )",
+      "id, type, name, standard_price, price_stage, is_active, availability, location, collection_id, collections ( name ), lots ( lot_no, article, color_num, brand_id, color_id, pattern_id, content_id, brands ( name ), colors ( name ), patterns ( name ), contents ( name ) ), models ( id, name, item_id, items ( name ) )",
     )
     .eq("type", 1);
 

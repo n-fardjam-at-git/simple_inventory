@@ -41,7 +41,7 @@ export const ADDRESS_FIELDS = [
   "account_number",
   "company_name",
   "address_type",
-  "label",
+  "location_name",
   "address_line1",
   "address_line2",
   "city",

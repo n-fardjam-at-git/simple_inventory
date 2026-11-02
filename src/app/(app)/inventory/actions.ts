@@ -26,5 +26,13 @@ export async function saveInventoryMatrix(productId: string, formData: FormData)
       p_notes: "inventory matrix",
     });
   }
+  if (formData.has("location")) {
+    const location = String(formData.get("location") ?? "");
+    const { error } = await supabase.rpc("set_product_location", {
+      p_product_id: productId,
+      p_location: location,
+    });
+    if (error) throw new Error(error.message);
+  }
   revalidatePath("/inventory");
 }
