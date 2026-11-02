@@ -234,33 +234,6 @@ export function NewOrderForm({
                       />
                     </FieldClear>
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="block">
-                      <span className="mb-1 block text-xs text-stone-500">Start</span>
-                      <FieldClear onClear={() => setStartDate("")} className="right-8">
-                        <input
-                          type="date"
-                          aria-label="Start"
-                          className="w-full rounded border py-1 pl-2 pr-14"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                        />
-                      </FieldClear>
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-xs text-stone-500">Cancel</span>
-                      <FieldClear onClear={() => setCancelDate("")} className="right-8">
-                        <input
-                          type="date"
-                          aria-label="Cancel"
-                          title="Latest date the order can be delivered"
-                          className="w-full rounded border py-1 pl-2 pr-14"
-                          value={cancelDate}
-                          onChange={(e) => setCancelDate(e.target.value)}
-                        />
-                      </FieldClear>
-                    </label>
-                  </div>
                   <div>
                     <span className="mb-1 block text-xs text-stone-500">Season</span>
                     <label className="inline-flex items-center gap-1.5">
@@ -287,6 +260,33 @@ export function NewOrderForm({
                         />
                       </FieldClear>
                     )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-stone-500">Start</span>
+                      <FieldClear onClear={() => setStartDate("")} className="right-8">
+                        <input
+                          type="date"
+                          aria-label="Start"
+                          className="w-full rounded border py-1 pl-2 pr-14"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                        />
+                      </FieldClear>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-stone-500">Cancel</span>
+                      <FieldClear onClear={() => setCancelDate("")} className="right-8">
+                        <input
+                          type="date"
+                          aria-label="Cancel"
+                          title="Latest date the order can be delivered"
+                          className="w-full rounded border py-1 pl-2 pr-14"
+                          value={cancelDate}
+                          onChange={(e) => setCancelDate(e.target.value)}
+                        />
+                      </FieldClear>
+                    </label>
                   </div>
                   {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
                   {dirty || saving ? (
