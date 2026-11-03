@@ -15,6 +15,7 @@ When the user asks for this sheet, **print it in the reply** (do not only follow
 | **docked-filter-panel** | Left 30% slide-over filter for a paged Fit List (Filter / Reset). Lots, products, inventory. |
 | **order-details-panel** | Right 95% slide-over for a cutting order (Open). Left: lots Fit List. Right: **add-product** + products for the selected lot. |
 | **add-product** | Header + equal-width item buttons (**Any** + first 14 `in_set` items). Popup Combo under the button filters by brand and item (**Any** = brand only) and inserts a product line. |
+| **products-button-list-picker** | The **Add a product** button list: **Any**, then the first 14 in-set items. The open button is filled. Its popup Combo sits under the button. An item button filters by that item; **Any** does not. Cutting orders also require the selected lot and brand, and include **New**. Customer orders leave out products already on the order, have no **New**, and edit that order’s price and size extras before Add. |
 | **variable-size/drop-matrix** | Sparse qty grid: one drop row at a time, Combo for unused drops, ↓ / ×. Not the dense inventory matrix. |
 | **products setting page** | Merchandise **Edit** popup on the products Fit List (selling, size/drop subset, size upcharges, photo gallery). Not a separate `/products/[id]` Settings screen. |
 | **product-size-drop-subset** | Add sizes/drops freely; do not remove a size or drop while it has on-hand qty. Same lock later for customer orders. |

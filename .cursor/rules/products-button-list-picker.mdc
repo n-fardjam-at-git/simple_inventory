@@ -1,0 +1,29 @@
+---
+description: Products button-list picker — centered Add a product item buttons that open a Combo under the button. Apply when the user says products-button-list-picker.
+alwaysApply: false
+---
+
+# Products button-list picker
+
+Reference: `src/app/(app)/cutting-orders/OrderDetailsPanel.tsx` and `src/app/(app)/customer-orders/OrderProductsPanel.tsx`.
+
+When the user says **products-button-list-picker**, reuse this instead of a lone Combo, an Add row on the Fit List, or a modal picker.
+
+## Chrome
+
+- **Centered** single box: stone-100 header (**Add a product**), then a segmented button list.
+- Equal-width buttons (`grid-flow-col auto-cols-fr`). The open button is filled stone-900.
+- At most **15** buttons: **Any** first, then the first **14** items with `in_set = true` (name order). Further in-set items stay reachable through **Any**.
+
+## Picker
+
+- A button opens a small popup **under that button**. Near the right edge, shift the popup left so it stays inside the panel (`data-clip`).
+- Combo Box of **active** merchandise. An item button also filters `models.item_id`. **Any** skips the item filter.
+- **Add** inserts that product and closes the popup. A duplicate says it is already on the order.
+- **Cancel** or Escape closes the popup only. It does not close the docked panel.
+- Do not put an **Add** row on the Fit List this picker feeds.
+
+## Where the list is narrowed
+
+- Cutting order: the selected lot and the order brand, plus the item. **New** (small red) creates merchandise for that locked lot and does not attach until **Add**.
+- Customer order: no lot and no **New**. Leave out products already on the order. The item filter is the only extra narrowing. After a product is chosen, **Price** and the size/drop extras can be changed before **Add**. Those amounts are stored on the order. They do not change the product. The order line shows the price beside the name. Its size/drop matrix starts as one blank row. A positive extra shows as amber **+$** on a row only after that row’s drop is set.

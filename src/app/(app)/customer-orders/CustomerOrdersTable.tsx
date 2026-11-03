@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { DismissNote } from "@/components/DismissNote";
 import { ComboBox } from "@/components/ComboBox";
 import { FitList } from "@/components/list/FitList";
@@ -27,9 +27,11 @@ type Customer = { id: string; account_no: number; company_name: string; account_
 export function CustomerOrdersTable({
   rows,
   customers,
+  onOpen,
 }: {
   rows: CustomerOrderRow[];
   customers: Customer[];
+  onOpen: (id: string) => void;
 }) {
   return (
     <FitList
@@ -50,13 +52,20 @@ export function CustomerOrdersTable({
           </tr>
         </thead>
       }
-      renderRow={(r) => <OrderRow row={r} customers={customers} />}
+      renderRow={(r) => <OrderRow row={r} customers={customers} onOpen={onOpen} />}
     />
   );
 }
 
-function OrderRow({ row, customers }: { row: CustomerOrderRow; customers: Customer[] }) {
-  const router = useRouter();
+function OrderRow({
+  row,
+  customers,
+  onOpen,
+}: {
+  row: CustomerOrderRow;
+  customers: Customer[];
+  onOpen: (id: string) => void;
+}) {
   const list = useList();
   const [customerId, setCustomerId] = useState(row.customer_id);
   const [startDate, setStartDate] = useState(row.start_date ?? "");
@@ -108,7 +117,7 @@ function OrderRow({ row, customers }: { row: CustomerOrderRow; customers: Custom
   });
 
   function openOrder() {
-    const go = () => router.push(`/customer-orders/${row.id}`);
+    const go = () => onOpen(row.id);
     if (editing && dirty) {
       list.tryLeave(go);
       return;
@@ -118,7 +127,11 @@ function OrderRow({ row, customers }: { row: CustomerOrderRow; customers: Custom
 
   return (
     <SelectableRow id={row.id}>
-      <td className="py-1.5 tabular-nums">{row.order_no}</td>
+      <td className="py-1.5 tabular-nums">
+        <Link href={`/customer-orders/${row.id}`} className="underline">
+          {row.order_no}
+        </Link>
+      </td>
       <td>
         {editing ? (
           <ComboBox

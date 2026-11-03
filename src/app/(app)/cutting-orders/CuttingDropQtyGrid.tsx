@@ -107,12 +107,14 @@ function usedDropIds(rows: DropRow[]) {
   return new Set(rows.map((r) => r.dropId).filter(Boolean));
 }
 
-function seedRows(drops: MatrixDrop[], cells: Cell[]): DropRow[] {
+function seedRows(drops: MatrixDrop[], cells: Cell[], qtyOnly = false): DropRow[] {
   if (isNoDropAxis(drops)) {
     return [{ key: drops[0]?.id ?? "none", dropId: drops[0]?.id ?? "" }];
   }
   const named = visibleDrops([...drops].sort((a, b) => a.sort_order - b.sort_order));
-  const have = new Set(cells.map((c) => c.drop_id));
+  const have = new Set(
+    cells.filter((cell) => !qtyOnly || Number(cell.qty) > 0).map((cell) => cell.drop_id),
+  );
   const chosen = named.filter((d) => have.has(d.id));
   if (!chosen.length) return [{ key: "blank", dropId: "" }];
   return chosen.map((d) => ({ key: d.id, dropId: d.id }));
@@ -125,6 +127,7 @@ export function CuttingDropQtyGrid({
   editable = false,
   namePrefix = "ord",
   onDirty,
+  qtyOnly = false,
 }: {
   sizes: MatrixSize[];
   drops: MatrixDrop[];
@@ -132,6 +135,8 @@ export function CuttingDropQtyGrid({
   editable?: boolean;
   namePrefix?: string;
   onDirty?: () => void;
+  /** Seed a row only when that drop has a quantity. Otherwise start with one blank row. */
+  qtyOnly?: boolean;
 }) {
   const sortedSizes = [...sizes].sort((a, b) => a.sort_order - b.sort_order);
   const hideDrop = isNoDropAxis(drops);
@@ -141,14 +146,14 @@ export function CuttingDropQtyGrid({
   const lookup = new Map(cells.map((c) => [`${c.size_id}:${c.drop_id}`, c.qty]));
   const gridRef = useRef<HTMLDivElement>(null);
   const [focusDropKey, setFocusDropKey] = useState<string | null>(null);
-  const [rows, setRows] = useState<DropRow[]>(() => seedRows(drops, cells));
+  const [rows, setRows] = useState<DropRow[]>(() => seedRows(drops, cells, qtyOnly));
   const [qtyMap, setQtyMap] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {};
     for (const c of cells) map[`${c.size_id}:${c.drop_id}`] = Number(c.qty ?? 0);
     return map;
   });
 
-  const shownRows = editable ? rows : seedRows(drops, cells);
+  const shownRows = editable ? rows : seedRows(drops, cells, qtyOnly);
 
   function qtyAt(sizeId: string, dropId: string) {
     if (!dropId) return 0;
@@ -306,26 +311,44 @@ export function CuttingDropQtyGrid({
                 )}
                 {sortedSizes.map((s, col) => {
                   const qty = qtyAt(s.id, row.dropId);
+                  const up = Number(
+                    cells.find((cell) => cell.size_id === s.id && cell.drop_id === row.dropId)?.upcharge ??
+                      0,
+                  );
                   return (
                     <td key={s.id} className="min-w-8 border border-stone-200 bg-white p-0 text-center">
                       {hideDrop && col === 0 && row.dropId ? (
                         <input type="hidden" name={`keepDrop:${row.dropId}`} value={row.dropId} />
                       ) : null}
                       {editable && row.dropId ? (
-                        <NumericInput
-                          className={CELL}
-                          inputMode="numeric"
-                          name={`${namePrefix}:${s.id}:${row.dropId}`}
-                          defaultValue={blankZero(qty)}
-                          data-col={col + dropCol}
-                          data-row={rowIndex}
-                          aria-label={`${drop?.code ?? "Drop"} ${s.code}`}
-                          onKeyDown={onGridKey}
-                        />
-                      ) : qty === 0 ? (
+                        <span className="inline-flex items-start justify-center gap-0.5">
+                          <NumericInput
+                            className={CELL}
+                            inputMode="numeric"
+                            name={`${namePrefix}:${s.id}:${row.dropId}`}
+                            defaultValue={blankZero(qty)}
+                            data-col={col + dropCol}
+                            data-row={rowIndex}
+                            aria-label={`${drop?.code ?? "Drop"} ${s.code}`}
+                            onKeyDown={onGridKey}
+                          />
+                          {up > 0 ? (
+                            <sup className="text-[10px] font-semibold leading-none text-amber-700">
+                              +${up}
+                            </sup>
+                          ) : null}
+                        </span>
+                      ) : qty === 0 && !(up > 0) ? (
                         <span className="text-stone-300">&nbsp;</span>
                       ) : (
-                        <span className="font-medium">{displayQty(qty)}</span>
+                        <span className="inline-flex items-start justify-center gap-0.5">
+                          <span className="font-medium">{qty === 0 ? "" : displayQty(qty)}</span>
+                          {up > 0 ? (
+                            <sup className="text-[10px] font-semibold leading-none text-amber-700">
+                              +${up}
+                            </sup>
+                          ) : null}
+                        </span>
                       )}
                     </td>
                   );

@@ -7,7 +7,7 @@ alwaysApply: false
 
 Reference: `src/app/(app)/cutting-orders/OrderDetailsPanel.tsx` (the **Add a product** box).
 
-When the user says **add-product**, reuse this instead of a lone Combo, an Add row on the Fit List, or a modal picker.
+When the user says **add-product**, reuse this instead of a lone Combo, an Add row on the Fit List, or a modal picker. The button list itself is **products-button-list-picker**.
 
 ## Chrome
 

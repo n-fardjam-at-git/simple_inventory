@@ -25,6 +25,13 @@ type Season = { season: string };
 
 const inputClass = "w-full rounded border py-1 pl-2 pr-6";
 
+function todayIso() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 export function NewOrderForm({
   customers,
   addresses,
@@ -240,7 +247,14 @@ export function NewOrderForm({
                       <input
                         type="checkbox"
                         checked={futureSeason === SHIP_AT_ONCE}
-                        onChange={(e) => setFutureSeason(e.target.checked ? SHIP_AT_ONCE : "")}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFutureSeason(SHIP_AT_ONCE);
+                            setStartDate(todayIso());
+                            return;
+                          }
+                          setFutureSeason("");
+                        }}
                       />
                       Ship at once
                     </label>

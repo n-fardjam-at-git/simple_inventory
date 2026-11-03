@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { parseCommissionPercent, SHIP_AT_ONCE, shipmentMethodLabel, WORKFLOW_STATUS } from "@/lib/customer-order";
+import { LINE_STATUS, parseCommissionPercent, SHIP_AT_ONCE, shipmentMethodLabel, WORKFLOW_STATUS } from "@/lib/customer-order";
+import { parseCellFields } from "@/lib/products";
 
 function blank(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -263,32 +264,115 @@ export async function updateCustomerOrder(orderId: string, formData: FormData) {
   revalidatePath("/customer-orders");
 }
 
-export async function addCustomerOrderProduct(orderId: string, formData: FormData) {
+export type OrderProductDraft = {
+  price: string;
+  sizes: { id: string; code: string; sort_order: number }[];
+  drops: { id: string; code: string; sort_order: number }[];
+  cells: { size_id: string; drop_id: string; qty: number; upcharge: number }[];
+};
+
+export async function loadOrderProductDraft(productId: string): Promise<OrderProductDraft | string> {
+  if (!productId) return "Pick a product.";
   const { supabase } = await staffId();
-  const productId = String(formData.get("product_id") || "");
   const { data: product } = await supabase
     .from("products")
     .select("id, type, is_active, standard_price")
     .eq("id", productId)
     .maybeSingle();
   if (!product || product.type !== 1 || product.is_active === false) {
-    redirect(orderError(orderId, "Pick an active merchandise product."));
+    return "Pick an active merchandise product.";
+  }
+  const [{ data: sizeRows }, { data: dropRows }, { data: ups }] = await Promise.all([
+    supabase
+      .from("product_sizes")
+      .select("size_chart_sizes ( id, code, sort_order )")
+      .eq("product_id", productId),
+    supabase
+      .from("product_drops")
+      .select("size_chart_drops ( id, code, sort_order )")
+      .eq("product_id", productId),
+    supabase
+      .from("product_price_upcharges")
+      .select("size_id, drop_id, upcharge_amount")
+      .eq("product_id", productId),
+  ]);
+  const dim = (raw: unknown) => {
+    const row = (Array.isArray(raw) ? raw[0] : raw) as {
+      id: string;
+      code: string;
+      sort_order: number;
+    } | null;
+    return row;
+  };
+  const sizes = (sizeRows ?? [])
+    .map((row) => dim(row.size_chart_sizes))
+    .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const drops = (dropRows ?? [])
+    .map((row) => dim(row.size_chart_drops))
+    .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const cells = (ups ?? [])
+    .filter((row) => Number(row.upcharge_amount) > 0)
+    .map((row) => ({
+      size_id: row.size_id,
+      drop_id: row.drop_id,
+      qty: 0,
+      upcharge: Number(row.upcharge_amount),
+    }));
+  return {
+    price: Number(product.standard_price ?? 0).toFixed(2),
+    sizes,
+    drops,
+    cells,
+  };
+}
+
+export async function addCustomerOrderProductId(
+  orderId: string,
+  productId: string,
+  draft?: { price: number; upcharges: { size_id: string; drop_id: string; amount: number }[] },
+) {
+  if (!orderId) return "Open an order first.";
+  if (!productId) return "Pick a product.";
+  const { supabase } = await staffId();
+  const { data: product } = await supabase
+    .from("products")
+    .select("id, type, is_active, standard_price")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!product || product.type !== 1 || product.is_active === false) {
+    return "Pick an active merchandise product.";
+  }
+  const price = draft ? Number(draft.price) : Number(product.standard_price ?? 0);
+  if (!Number.isFinite(price) || price < 0) return "Enter a price.";
+  if (draft?.upcharges.some((row) => !Number.isFinite(row.amount) || row.amount < 0)) {
+    return "Enter a size extra of zero or more.";
   }
   const { error } = await supabase.from("customer_order_products").insert({
     customer_order_id: orderId,
     product_id: productId,
-    price: Number(product.standard_price ?? 0),
+    price,
     status: "pending",
   });
   if (error) {
-    const message = error.code === "23505" ? "That product is already on the order." : error.message;
-    redirect(orderError(orderId, message));
+    return error.code === "23505" ? "That product is already on the order." : error.message;
   }
-  const { data: ups } = await supabase
-    .from("product_price_upcharges")
-    .select("size_id, drop_id, upcharge_amount")
-    .eq("product_id", productId);
-  const rows = (ups ?? [])
+  const ups = draft
+    ? draft.upcharges
+        .filter((row) => Number(row.amount) > 0)
+        .map((row) => ({
+          size_id: row.size_id,
+          drop_id: row.drop_id,
+          upcharge_amount: Number(row.amount),
+        }))
+    : (
+        await supabase
+          .from("product_price_upcharges")
+          .select("size_id, drop_id, upcharge_amount")
+          .eq("product_id", productId)
+      ).data ?? [];
+  const rows = ups
     .filter((u) => Number(u.upcharge_amount) > 0)
     .map((u) => ({
       customer_order_id: orderId,
@@ -300,10 +384,102 @@ export async function addCustomerOrderProduct(orderId: string, formData: FormDat
       price: Number(u.upcharge_amount),
     }));
   if (rows.length) {
-    await supabase.from("customer_order_cells").insert(rows);
+    const { error: cellError } = await supabase.from("customer_order_cells").insert(rows);
+    if (cellError) return cellError.message;
   }
   revalidatePath(`/customer-orders/${orderId}`);
   revalidatePath("/customer-orders");
+  return null;
+}
+
+export async function addCustomerOrderProduct(orderId: string, formData: FormData) {
+  const message = await addCustomerOrderProductId(orderId, String(formData.get("product_id") || ""));
+  if (message) redirect(orderError(orderId, message));
+}
+
+export async function saveCustomerOrderQty(
+  orderId: string,
+  productId: string,
+  status: string,
+  formData: FormData,
+) {
+  const { supabase } = await staffId();
+  if (!LINE_STATUS.includes(status as (typeof LINE_STATUS)[number])) return "Pick a line status.";
+  const { error: lineError } = await supabase
+    .from("customer_order_products")
+    .update({ status })
+    .eq("customer_order_id", orderId)
+    .eq("product_id", productId);
+  if (lineError) return lineError.message;
+
+  const cells = parseCellFields(formData, "ord");
+  const keep = [
+    ...new Set(
+      [...formData.keys()]
+        .filter((key) => key.startsWith("keepDrop:"))
+        .map((key) => key.slice("keepDrop:".length))
+        .filter(Boolean),
+    ),
+  ];
+  const keepSet = new Set(keep);
+  const { data: existing } = await supabase
+    .from("customer_order_cells")
+    .select("size_id, drop_id, qty_shipped, price")
+    .eq("customer_order_id", orderId)
+    .eq("product_id", productId);
+  const blocked = (existing ?? []).some(
+    (cell) => !keepSet.has(cell.drop_id) && Number(cell.qty_shipped) > 0,
+  );
+  if (blocked) return "A shipped quantity is still on a drop you removed.";
+  const prev = new Map(
+    (existing ?? []).map((cell) => [`${cell.size_id}:${cell.drop_id}`, cell]),
+  );
+  const rows = cells
+    .filter((cell) => keepSet.has(cell.drop_id))
+    .map((cell) => {
+      const old = prev.get(`${cell.size_id}:${cell.drop_id}`);
+      return {
+        customer_order_id: orderId,
+        product_id: productId,
+        size_id: cell.size_id,
+        drop_id: cell.drop_id,
+        qty: Math.max(0, Number(cell.qty) || 0),
+        qty_shipped: Number(old?.qty_shipped ?? 0),
+        price: old?.price ?? null,
+      };
+    });
+  if (rows.length) {
+    const { error } = await supabase.from("customer_order_cells").upsert(rows, {
+      onConflict: "customer_order_id,product_id,size_id,drop_id",
+    });
+    if (error) return error.message;
+  }
+  let removing = supabase
+    .from("customer_order_cells")
+    .delete()
+    .eq("customer_order_id", orderId)
+    .eq("product_id", productId);
+  if (keep.length) {
+    removing = removing.not("drop_id", "in", `(${keep.map((id) => `"${id}"`).join(",")})`);
+  }
+  const { error: delError } = await removing;
+  if (delError) return delError.message;
+  revalidatePath(`/customer-orders/${orderId}`);
+  revalidatePath("/customer-orders");
+  return null;
+}
+
+export async function removeCustomerOrderProductId(orderId: string, productId: string) {
+  const { supabase } = await staffId();
+  const { error } = await supabase
+    .from("customer_order_products")
+    .delete()
+    .eq("customer_order_id", orderId)
+    .eq("product_id", productId);
+  if (error) return error.message;
+  revalidatePath(`/customer-orders/${orderId}`);
+  revalidatePath("/customer-orders");
+  return null;
 }
 
 export async function saveCustomerOrderLine(
