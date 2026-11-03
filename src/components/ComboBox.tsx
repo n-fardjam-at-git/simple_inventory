@@ -70,6 +70,7 @@ export function ComboBox({
   autoFocus = false,
   "aria-label": ariaLabel,
   onKeyDown,
+  clearable = true,
   "data-col": dataCol,
   "data-row": dataRow,
 }: {
@@ -86,6 +87,8 @@ export function ComboBox({
   autoFocus?: boolean;
   "aria-label"?: string;
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  /** Drop Combo Box in a size/drop grid passes false. */
+  clearable?: boolean;
   "data-col"?: number | string;
   "data-row"?: number | string;
 }) {
@@ -155,6 +158,12 @@ export function ComboBox({
     onChange?.(nextId);
   }
 
+  function clear() {
+    apply("");
+    setText("");
+    inputRef.current?.setCustomValidity(emptyOkRef.current ? "" : REJECT_MSG);
+  }
+
   function revertShown(el: HTMLInputElement) {
     const label = shownText(optionsRef.current, idRef.current, allowAnyRef.current);
     el.value = label;
@@ -168,8 +177,11 @@ export function ComboBox({
     el.setCustomValidity(msg);
   }
 
+  const stretch = /\b(?:w-full|block)\b/.test(className);
+  const padRight = clearable && !/\bpr-/.test(className) ? "1.5rem" : undefined;
+
   return (
-    <>
+    <div className={stretch ? "relative block w-full" : "relative inline-block max-w-full"}>
       {name ? <input type="hidden" name={name} value={id} /> : null}
       <input
         ref={inputRef}
@@ -184,6 +196,7 @@ export function ComboBox({
         data-col={dataCol}
         data-row={dataRow}
         className={className}
+        style={padRight ? { paddingRight: padRight } : undefined}
         required={required && !emptyOk}
         onChange={(e) => {
           const v = e.target.value;
@@ -231,11 +244,23 @@ export function ComboBox({
           }
         }}
       />
+      {clearable ? (
+        <button
+          type="button"
+          data-combo-clear=""
+          className="absolute top-1/2 right-1 z-10 -translate-y-1/2 px-0.5 text-sm leading-none text-stone-400 hover:text-stone-700"
+          aria-label="Clear"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={clear}
+        >
+          ×
+        </button>
+      ) : null}
       <datalist id={listId}>
         {options.map((o) => (
           <option key={o.id} value={o.label} />
         ))}
       </datalist>
-    </>
+    </div>
   );
 }

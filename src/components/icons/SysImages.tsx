@@ -140,6 +140,50 @@ export function SysStop({ className }: { className?: string }) {
   );
 }
 
+export function SysDollar({ className }: { className?: string }) {
+  const uid = useId().replace(/:/g, "");
+  const base = `${uid}-base`;
+  const top = `${uid}-top`;
+  return (
+    <SysImage className={className}>
+      <rect x="6" y="6" width="44" height="44" rx="14" fill={`url(#${base})`} />
+      <rect x="9" y="9" width="38" height="38" rx="11" fill={`url(#${top})`} fillOpacity="0.9" />
+      <text
+        x="28"
+        y="38"
+        fill="#78350F"
+        fontFamily="system-ui, -apple-system, sans-serif"
+        fontWeight="900"
+        fontSize="28"
+        textAnchor="middle"
+      >
+        $
+      </text>
+      <text
+        x="28"
+        y="36.5"
+        fill="#FFFBEB"
+        fontFamily="system-ui, -apple-system, sans-serif"
+        fontWeight="900"
+        fontSize="28"
+        textAnchor="middle"
+      >
+        $
+      </text>
+      <defs>
+        <linearGradient id={base} x1="6" y1="6" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#D97706" />
+          <stop offset="1" stopColor="#92400E" />
+        </linearGradient>
+        <linearGradient id={top} x1="9" y1="9" x2="47" y2="47" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FDE68A" />
+          <stop offset="1" stopColor="#F59E0B" />
+        </linearGradient>
+      </defs>
+    </SysImage>
+  );
+}
+
 export function SysFolder({ className }: { className?: string }) {
   return (
     <SysImage className={className}>
@@ -151,6 +195,17 @@ export function SysFolder({ className }: { className?: string }) {
         d="M7 20C7 17.7909 8.79086 16 11 16H45C47.2091 16 49 17.7909 49 20V41C49 43.2091 47.2091 45 45 45H11C8.79086 45 7 43.2091 7 41V20Z"
         fill="#F59E0B"
       />
+      <text
+        x="28"
+        y="36"
+        fill="#FFFFFF"
+        fontFamily="system-ui, -apple-system, sans-serif"
+        fontWeight="700"
+        fontSize="10"
+        textAnchor="middle"
+      >
+        Open
+      </text>
     </SysImage>
   );
 }
@@ -166,6 +221,17 @@ export function SysFolderOpen({ className }: { className?: string }) {
         d="M7 21C7 18.7909 8.79086 17 11 17H45C47.2091 17 49 18.7909 49 21V41C49 43.2091 47.2091 45 45 45H11C8.79086 45 7 43.2091 7 41V21Z"
         fill="#F59E0B"
       />
+      <text
+        x="28"
+        y="36"
+        fill="#FFFFFF"
+        fontFamily="system-ui, -apple-system, sans-serif"
+        fontWeight="700"
+        fontSize="10"
+        textAnchor="middle"
+      >
+        Open
+      </text>
     </SysImage>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ComboBox } from "@/components/ComboBox";
 import { NumericInput } from "@/components/NumericInput";
 import type { Cell, MatrixDrop, MatrixSize } from "@/components/matrix/QtyMatrix";
@@ -128,6 +128,8 @@ export function CuttingDropQtyGrid({
   namePrefix = "ord",
   onDirty,
   qtyOnly = false,
+  linePrice,
+  onExtendedChange,
 }: {
   sizes: MatrixSize[];
   drops: MatrixDrop[];
@@ -137,6 +139,9 @@ export function CuttingDropQtyGrid({
   onDirty?: () => void;
   /** Seed a row only when that drop has a quantity. Otherwise start with one blank row. */
   qtyOnly?: boolean;
+  /** Line price used to report the extended total. */
+  linePrice?: number;
+  onExtendedChange?: (amount: number) => void;
 }) {
   const sortedSizes = [...sizes].sort((a, b) => a.sort_order - b.sort_order);
   const hideDrop = isNoDropAxis(drops);
@@ -241,6 +246,25 @@ export function CuttingDropQtyGrid({
     if (!r.dropId) return sum;
     return sum + sortedSizes.reduce((s, size) => s + qtyAt(size.id, r.dropId), 0);
   }, 0);
+  const extended = shownRows.reduce((sum, r) => {
+    if (!r.dropId || linePrice == null) return sum;
+    return (
+      sum +
+      sortedSizes.reduce((s, size) => {
+        const qty = qtyAt(size.id, r.dropId);
+        const up = Number(
+          cells.find((cell) => cell.size_id === size.id && cell.drop_id === r.dropId)?.upcharge ?? 0,
+        );
+        return s + qty * (linePrice + up);
+      }, 0)
+    );
+  }, 0);
+  const onExtendedRef = useRef(onExtendedChange);
+  onExtendedRef.current = onExtendedChange;
+  useEffect(() => {
+    if (linePrice == null) return;
+    onExtendedRef.current?.(extended);
+  }, [extended, linePrice]);
 
   return (
     <div
@@ -293,6 +317,7 @@ export function CuttingDropQtyGrid({
                     {editable ? (
                       <ComboBox
                         allowEmpty
+                        clearable={false}
                         autoFocus={row.key === focusDropKey}
                         className={DROP_CELL}
                         placeholder="Drop"

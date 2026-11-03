@@ -286,10 +286,11 @@ function FieldClear({
   children: ReactNode;
 }) {
   return (
-    <div className="relative">
+    <div className="relative" data-clear-wrap="">
       {children}
       <button
         type="button"
+        data-clear-btn=""
         className={`absolute right-1 z-10 px-0.5 text-sm leading-none text-stone-400 hover:text-stone-700 ${
           top ? "top-1.5" : "top-1/2 -translate-y-1/2"
         }`}

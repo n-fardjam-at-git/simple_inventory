@@ -14,6 +14,7 @@ When the user says **products-button-list-picker**, reuse this instead of a lone
 - **Centered** single box: stone-100 header (**Add a product**), then a segmented button list.
 - Equal-width buttons (`grid-flow-col auto-cols-fr`). The open button is filled stone-900.
 - At most **15** buttons: **Any** first, then the first **14** items with `in_set = true` (name order). Further in-set items stay reachable through **Any**.
+- Customer orders add **Charges** to the left of **Any**, so that bar is **Charges** + **Any** + 14 items. Cutting orders stay **Any** + 14.
 
 ## Picker
 
@@ -26,4 +27,5 @@ When the user says **products-button-list-picker**, reuse this instead of a lone
 ## Where the list is narrowed
 
 - Cutting order: the selected lot and the order brand, plus the item. **New** (small red) creates merchandise for that locked lot and does not attach until **Add**.
-- Customer order: no lot and no **New**. Leave out products already on the order. The item filter is the only extra narrowing. After a product is chosen, **Price** and the size/drop extras can be changed before **Add**. Those amounts are stored on the order. They do not change the product. The order line shows the price beside the name. Its size/drop matrix starts as one blank row. A positive extra shows as amber **+$** on a row only after that row’s drop is set.
+- Customer order: no lot and no **New**. Leave out products already on the order. The item filter is the only extra narrowing. After a product is chosen, **Price** and the size/drop extras can be changed before **Add**. Those amounts are stored on the order. They do not change the product. The order line shows products.name with the price beside it, in 16% of the row. Its size/drop matrix starts as one blank row. A positive extra shows as amber **+$** on a row only after that row’s drop is set.
+- **Charges** (customer orders only) sits to the left of **Any**. Its Combo lists active surcharge and freight (`type` 2 or 3) that are not already on the order. Freight sets **Cost** and the quantity is always 1. A surcharge sets **Qty** and **Price**. Each starts from `standard_price`. **Add** writes the line. There is no size/drop matrix.

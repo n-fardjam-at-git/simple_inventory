@@ -337,10 +337,11 @@ function FieldClear({
   children: ReactNode;
 }) {
   return (
-    <div className="relative">
+    <div className="relative" data-clear-wrap="">
       {children}
       <button
         type="button"
+        data-clear-btn=""
         className={`absolute top-1/2 z-10 -translate-y-1/2 px-0.5 text-sm leading-none text-stone-400 hover:text-stone-700 ${className}`}
         aria-label="Clear"
         onClick={onClear}

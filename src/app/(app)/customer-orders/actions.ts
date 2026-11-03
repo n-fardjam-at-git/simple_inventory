@@ -392,6 +392,72 @@ export async function addCustomerOrderProductId(
   return null;
 }
 
+export async function addCustomerOrderCharge(
+  orderId: string,
+  productId: string,
+  price: number,
+  qty: number,
+) {
+  if (!orderId) return "Open an order first.";
+  if (!productId) return "Pick a charge.";
+  const { supabase } = await staffId();
+  const { data: product } = await supabase
+    .from("products")
+    .select("id, type, is_active")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!product || product.is_active === false || (product.type !== 2 && product.type !== 3)) {
+    return "Pick an active surcharge or freight.";
+  }
+  if (!Number.isFinite(price) || price < 0) return "Enter a price.";
+  const freight = product.type === 3;
+  const nextQty = freight ? 1 : Math.trunc(Number(qty));
+  if (!freight && (!Number.isFinite(nextQty) || nextQty < 0)) return "Enter a quantity.";
+  const { error } = await supabase.from("customer_order_products").insert({
+    customer_order_id: orderId,
+    product_id: productId,
+    price,
+    qty: nextQty,
+    status: "pending",
+  });
+  if (error) {
+    return error.code === "23505" ? "That product is already on the order." : error.message;
+  }
+  revalidatePath(`/customer-orders/${orderId}`);
+  revalidatePath("/customer-orders");
+  return null;
+}
+
+export async function saveCustomerOrderCharge(
+  orderId: string,
+  productId: string,
+  status: string,
+  price: number,
+  qty: number,
+) {
+  const { supabase } = await staffId();
+  if (!LINE_STATUS.includes(status as (typeof LINE_STATUS)[number])) return "Pick a line status.";
+  if (!Number.isFinite(price) || price < 0) return "Enter a price.";
+  const { data: product } = await supabase
+    .from("products")
+    .select("type")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!product || (product.type !== 2 && product.type !== 3)) return "That line is not a charge.";
+  const freight = product.type === 3;
+  const nextQty = freight ? 1 : Math.trunc(Number(qty));
+  if (!freight && (!Number.isFinite(nextQty) || nextQty < 0)) return "Enter a quantity.";
+  const { error } = await supabase
+    .from("customer_order_products")
+    .update({ price, qty: nextQty, status })
+    .eq("customer_order_id", orderId)
+    .eq("product_id", productId);
+  if (error) return error.message;
+  revalidatePath(`/customer-orders/${orderId}`);
+  revalidatePath("/customer-orders");
+  return null;
+}
+
 export async function addCustomerOrderProduct(orderId: string, formData: FormData) {
   const message = await addCustomerOrderProductId(orderId, String(formData.get("product_id") || ""));
   if (message) redirect(orderError(orderId, message));
@@ -464,6 +530,59 @@ export async function saveCustomerOrderQty(
   }
   const { error: delError } = await removing;
   if (delError) return delError.message;
+  revalidatePath(`/customer-orders/${orderId}`);
+  revalidatePath("/customer-orders");
+  return null;
+}
+
+export async function saveCustomerOrderPrice(
+  orderId: string,
+  productId: string,
+  price: number,
+  upcharges: { size_id: string; drop_id: string; amount: number }[],
+) {
+  const { supabase } = await staffId();
+  if (!Number.isFinite(price) || price < 0) return "Enter a price.";
+  if (upcharges.some((row) => !row.size_id || !row.drop_id || !Number.isFinite(row.amount) || row.amount < 0)) {
+    return "Enter a size extra of zero or more.";
+  }
+  const { error: lineError } = await supabase
+    .from("customer_order_products")
+    .update({ price })
+    .eq("customer_order_id", orderId)
+    .eq("product_id", productId);
+  if (lineError) return lineError.message;
+
+  const { data: existing } = await supabase
+    .from("customer_order_cells")
+    .select("size_id, drop_id, qty, qty_shipped")
+    .eq("customer_order_id", orderId)
+    .eq("product_id", productId);
+  const prev = new Map(
+    (existing ?? []).map((cell) => [`${cell.size_id}:${cell.drop_id}`, cell]),
+  );
+  const rows = upcharges.flatMap((row) => {
+    const old = prev.get(`${row.size_id}:${row.drop_id}`);
+    const amount = Number(row.amount) || 0;
+    if (amount <= 0 && !old) return [];
+    return [
+      {
+        customer_order_id: orderId,
+        product_id: productId,
+        size_id: row.size_id,
+        drop_id: row.drop_id,
+        qty: Number(old?.qty ?? 0),
+        qty_shipped: Number(old?.qty_shipped ?? 0),
+        price: amount > 0 ? amount : null,
+      },
+    ];
+  });
+  if (rows.length) {
+    const { error } = await supabase.from("customer_order_cells").upsert(rows, {
+      onConflict: "customer_order_id,product_id,size_id,drop_id",
+    });
+    if (error) return error.message;
+  }
   revalidatePath(`/customer-orders/${orderId}`);
   revalidatePath("/customer-orders");
   return null;

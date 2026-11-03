@@ -8,6 +8,7 @@ import { NewOrderForm } from "./NewOrderForm";
 import {
   OrderProductsPanel,
   type CatalogChoice,
+  type ChargeChoice,
   type OrderProductLine,
   type SetItem,
 } from "./OrderProductsPanel";
@@ -34,6 +35,7 @@ export function CustomerOrdersWorkspace({
   lines,
   setItems,
   catalog,
+  charges,
 }: {
   rows: CustomerOrderRow[];
   customers: Customer[];
@@ -44,6 +46,7 @@ export function CustomerOrdersWorkspace({
   lines: OrderProductLine[];
   setItems: SetItem[];
   catalog: CatalogChoice[];
+  charges: ChargeChoice[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const order = rows.find((row) => row.id === openId) ?? null;
@@ -68,6 +71,7 @@ export function CustomerOrdersWorkspace({
         lines={lines.filter((line) => line.customer_order_id === openId)}
         setItems={setItems}
         catalog={catalog}
+        charges={charges}
       />
     </>
   );

@@ -1,22 +1,29 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { DockedPanel } from "@/components/filter/DockedPanel";
-import { Btn } from "@/components/ui";
+import { Btn, Card } from "@/components/ui";
 import { ComboBox, reportInvalidCombo } from "@/components/ComboBox";
 import { DismissNote } from "@/components/DismissNote";
 import { FitList } from "@/components/list/FitList";
 import { SelectableRow, RowButtons, useList, useListRow } from "@/components/list/ListTable";
 import { useRefreshRow } from "@/components/list/useRefreshRow";
 import { UpchargeMatrix, type Cell, type MatrixDrop, type MatrixSize } from "@/components/matrix/QtyMatrix";
+import { NumericInput } from "@/components/NumericInput";
 import { PriceInput } from "@/components/PriceInput";
+import { SysDollar } from "@/components/icons/SysImages";
 import { CuttingDropQtyGrid } from "../cutting-orders/CuttingDropQtyGrid";
 import { LINE_STATUS, orderStatusLabel } from "@/lib/customer-order";
+import { PRODUCT_TYPE } from "@/lib/product-type";
 import {
+  addCustomerOrderCharge,
   addCustomerOrderProductId,
   loadOrderProductDraft,
   removeCustomerOrderProductId,
+  saveCustomerOrderCharge,
+  saveCustomerOrderPrice,
   saveCustomerOrderQty,
   type OrderProductDraft,
 } from "./actions";
@@ -25,6 +32,8 @@ export type OrderProductLine = {
   customer_order_id: string;
   product_id: string;
   status: string;
+  type: number;
+  qty: number | null;
   price: number;
   label: string;
   sizes: MatrixSize[];
@@ -33,9 +42,24 @@ export type OrderProductLine = {
 };
 
 export type CatalogChoice = { id: string; label: string; item_id: string | null };
+export type ChargeChoice = { id: string; label: string; type: number; price: number };
 export type SetItem = { id: string; name: string };
 
 const ANY: SetItem = { id: "any", name: "Any" };
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+
+function lineExtended(row: OrderProductLine) {
+  if (row.type !== PRODUCT_TYPE.merchandise) {
+    const qty = row.type === PRODUCT_TYPE.freight ? 1 : Number(row.qty) || 0;
+    return qty * (Number(row.price) || 0);
+  }
+  const price = Number(row.price) || 0;
+  return row.cells.reduce((sum, cell) => {
+    const qty = Number(cell.qty) || 0;
+    const up = Number(cell.upcharge) || 0;
+    return sum + qty * (price + up);
+  }, 0);
+}
 
 export function OrderProductsPanel({
   open,
@@ -45,6 +69,7 @@ export function OrderProductsPanel({
   lines,
   setItems,
   catalog,
+  charges,
 }: {
   open: boolean;
   onClose: () => void;
@@ -53,10 +78,12 @@ export function OrderProductsPanel({
   lines: OrderProductLine[];
   setItems: SetItem[];
   catalog: CatalogChoice[];
+  charges: ChargeChoice[];
 }) {
   const [pickItemId, setPickItemId] = useState<string | null>(null);
   const onOrder = new Set(lines.map((line) => line.product_id));
   const choices = catalog.filter((product) => !onOrder.has(product.id));
+  const chargeChoices = charges.filter((charge) => !onOrder.has(charge.id));
 
   useEffect(() => {
     if (!open) setPickItemId(null);
@@ -78,6 +105,13 @@ export function OrderProductsPanel({
                 Add a product
               </div>
               <div className="grid grid-flow-col auto-cols-fr">
+                <ChargePickButton
+                  open={pickItemId === "charges"}
+                  orderId={orderId}
+                  options={chargeChoices}
+                  onToggle={() => setPickItemId((cur) => (cur === "charges" ? null : "charges"))}
+                  onClose={() => setPickItemId(null)}
+                />
                 {[ANY, ...setItems].map((item) => (
                   <ItemPickButton
                     key={item.id}
@@ -98,6 +132,171 @@ export function OrderProductsPanel({
         </div>
       ) : null}
     </DockedPanel>
+  );
+}
+
+function ChargePickButton({
+  open,
+  orderId,
+  options,
+  onToggle,
+  onClose,
+}: {
+  open: boolean;
+  orderId: string;
+  options: ChargeChoice[];
+  onToggle: () => void;
+  onClose: () => void;
+}) {
+  const [productId, setProductId] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const popRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  const chosen = options.find((charge) => charge.id === productId) ?? null;
+  const freight = chosen?.type === PRODUCT_TYPE.freight;
+
+  useEffect(() => {
+    if (!open) {
+      setProductId("");
+      setErr(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      onClose();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, onClose]);
+
+  useLayoutEffect(() => {
+    const pop = popRef.current;
+    if (!open || !pop) return;
+    pop.style.transform = "";
+    const clip = pop.closest("[data-clip]");
+    if (!clip) return;
+    const popRect = pop.getBoundingClientRect();
+    const clipRect = clip.getBoundingClientRect();
+    const pad = 8;
+    let dx = 0;
+    if (popRect.right > clipRect.right - pad) dx = clipRect.right - pad - popRect.right;
+    if (popRect.left + dx < clipRect.left + pad) dx = clipRect.left + pad - popRect.left;
+    pop.style.transform = dx ? `translateX(${Math.round(dx)}px)` : "";
+  }, [open, chosen]);
+
+  function add() {
+    if (reportInvalidCombo(popRef.current)) return;
+    if (!chosen) {
+      setErr("Pick a charge.");
+      return;
+    }
+    const formData = new FormData(formRef.current ?? undefined);
+    const price = Number(formData.get("price"));
+    const qty = freight ? 1 : Number(formData.get("qty"));
+    start(async () => {
+      const message = await addCustomerOrderCharge(orderId, chosen.id, price, qty);
+      if (message) {
+        setErr(message);
+        return;
+      }
+      router.refresh();
+      onClose();
+    });
+  }
+
+  return (
+    <div className="relative w-full not-first:border-l not-first:border-stone-300">
+      <button
+        type="button"
+        className={`w-full px-3 py-2 text-center text-sm leading-none ${
+          open ? "bg-stone-900 text-white" : "text-stone-800 hover:bg-stone-50"
+        }`}
+        onClick={onToggle}
+      >
+        Charges
+      </button>
+      {open ? (
+        <div
+          ref={popRef}
+          className="absolute top-full left-0 z-20 mt-1 w-72 max-h-[70vh] overflow-auto rounded-lg border border-stone-200 bg-white p-3 shadow-lg"
+        >
+          <label className="mb-2 block text-sm">
+            <span className="mb-1 block text-stone-500">Charge</span>
+            <ComboBox
+              required
+              className="w-full rounded border px-2 py-1"
+              placeholder="Freight or surcharge"
+              value={productId}
+              onChange={(id) => {
+                setProductId(id);
+                setErr(null);
+              }}
+              options={options.map((charge) => ({ id: charge.id, label: charge.label }))}
+            />
+          </label>
+          {chosen ? (
+            <form key={chosen.id} ref={formRef} className="mb-3 space-y-3" onSubmit={(e) => e.preventDefault()}>
+              {freight ? (
+                <label className="block text-sm">
+                  <span className="mb-1 block text-stone-500">Cost</span>
+                  <PriceInput
+                    name="price"
+                    defaultValue={chosen.price}
+                    className="w-28 rounded border px-2 py-1"
+                    aria-label="Cost"
+                  />
+                </label>
+              ) : (
+                <>
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-stone-500">Qty</span>
+                    <NumericInput
+                      name="qty"
+                      defaultValue={1}
+                      className="w-28 rounded border px-2 py-1"
+                      aria-label="Quantity"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-stone-500">Price</span>
+                    <PriceInput
+                      name="price"
+                      defaultValue={chosen.price}
+                      className="w-28 rounded border px-2 py-1"
+                      aria-label="Price"
+                    />
+                  </label>
+                </>
+              )}
+            </form>
+          ) : null}
+          {err ? (
+            <DismissNote className="mb-2 text-xs text-red-700" onDismiss={() => setErr(null)}>
+              {err}
+            </DismissNote>
+          ) : null}
+          <div className="flex gap-2">
+            <Btn type="button" busy={pending} onClick={add}>
+              Add
+            </Btn>
+            <button
+              type="button"
+              className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-50"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -279,26 +478,70 @@ function ItemPickButton({
 }
 
 function OrderProductTable({ rows }: { rows: OrderProductLine[] }) {
-  const items = [...rows].sort((a, b) =>
-    a.label.localeCompare(b.label, "en", { sensitivity: "base" }),
-  );
+  const items = [...rows].sort((a, b) => {
+    if (a.type !== b.type) return a.type - b.type;
+    return a.label.localeCompare(b.label, "en", { sensitivity: "base" });
+  });
   return (
-    <FitList
-      items={items}
-      getKey={(row) => `${row.customer_order_id}:${row.product_id}`}
-      stretch
-      tableClassName="inventory-boards table-fixed"
-      thead={
-        <thead>
-          <tr className="text-stone-500">
-            <th className="w-52 py-1">Product</th>
-            <th className="w-full py-1"></th>
-            <th className="w-32 py-1"></th>
-          </tr>
-        </thead>
-      }
-      renderRow={(row) => <ProductLineRow row={row} />}
-    />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <FitList
+        items={items}
+        getKey={(row) => `${row.customer_order_id}:${row.product_id}`}
+        stretch
+        tableClassName="inventory-boards table-fixed"
+        thead={
+          <thead>
+            <tr className="text-stone-500">
+              <th className="w-[16%] py-1">Product</th>
+              <th className="py-1"></th>
+              <th className="w-40 py-1"></th>
+            </tr>
+          </thead>
+        }
+        renderRow={(row) =>
+          row.type === PRODUCT_TYPE.merchandise ? (
+            <ProductLineRow row={row} />
+          ) : (
+            <ChargeLineRow row={row} />
+          )
+        }
+      />
+      <OrderExtendedTotals rows={rows} />
+    </div>
+  );
+}
+
+function OrderExtendedTotals({ rows }: { rows: OrderProductLine[] }) {
+  let freight = 0;
+  let surcharge = 0;
+  let merchandise = 0;
+  for (const row of rows) {
+    if (row.status === "canceled") continue;
+    const amount = lineExtended(row);
+    if (row.type === PRODUCT_TYPE.freight) freight += amount;
+    else if (row.type === PRODUCT_TYPE.surcharge) surcharge += amount;
+    else merchandise += amount;
+  }
+  const total = freight + surcharge + merchandise;
+  const box =
+    "inline-flex min-w-12 shrink-0 items-center justify-end overflow-hidden border border-stone-200 bg-stone-50 px-0.5 py-0 text-xs font-semibold tabular-nums";
+  const parts = [
+    ["Freight", freight],
+    ["Surcharge", surcharge],
+    ["Merchandise", merchandise],
+    ["Total", total],
+  ] as const;
+  return (
+    <div className="mt-2 flex shrink-0 justify-end pr-2">
+      <div className="grid grid-cols-[auto_auto] items-center gap-x-3 gap-y-1">
+        {parts.map(([label, amount]) => (
+          <div key={label} className="contents">
+            <span className="text-right text-xs text-stone-500">{label}</span>
+            <span className={box}>{usd.format(amount)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -309,6 +552,8 @@ function ProductLineRow({ row }: { row: OrderProductLine }) {
   const [pending, start] = useTransition();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [priceOpen, setPriceOpen] = useState(false);
+  const [extended, setExtended] = useState(() => lineExtended(row));
   const formRef = useRef<HTMLFormElement>(null);
   const busy = useRef(false);
   const list = useList();
@@ -365,15 +610,32 @@ function ProductLineRow({ row }: { row: OrderProductLine }) {
   });
 
   useEffect(() => {
-    if (!editing) setStatus(row.status);
+    if (!editing) {
+      setStatus(row.status);
+      setPriceOpen(false);
+    }
   }, [row.status, editing]);
 
   return (
     <SelectableRow id={id}>
-      <td className="w-52 pr-2">
-        <div className="font-medium leading-tight">
-          {row.label}
-          <span className="ml-1.5 font-light text-stone-500">${Number(row.price).toFixed(2)}</span>
+      <td className="w-[16%] min-w-0 break-words pr-2">
+        <div className="flex flex-wrap items-center gap-1 font-medium leading-tight">
+          <span>{row.label}</span>
+          <span className="font-light text-stone-500">${Number(row.price).toFixed(2)}</span>
+          {editing ? (
+            <button
+              type="button"
+              className="rounded p-0.5 hover:bg-stone-100"
+              aria-label="Price and size extras"
+              title="Price and size extras"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPriceOpen(true);
+              }}
+            >
+              <SysDollar />
+            </button>
+          ) : null}
         </div>
         <div className="mt-1 text-xs leading-tight">
           {editing ? (
@@ -394,6 +656,13 @@ function ProductLineRow({ row }: { row: OrderProductLine }) {
           )}
         </div>
         {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
+        {priceOpen ? (
+          <PriceExtrasCard
+            row={row}
+            onClose={() => setPriceOpen(false)}
+            onSaved={refreshRow}
+          />
+        ) : null}
       </td>
       <td className="w-full min-w-0 pr-1">
         {editing ? (
@@ -414,15 +683,34 @@ function ProductLineRow({ row }: { row: OrderProductLine }) {
               editable
               qtyOnly
               namePrefix="ord"
+              linePrice={row.price}
+              onExtendedChange={setExtended}
               onDirty={() => setMatrixDirty(true)}
             />
           </form>
         ) : (
-          <CuttingDropQtyGrid qtyOnly sizes={row.sizes} drops={row.drops} cells={row.cells} />
+          <div
+            className="cursor-pointer"
+            title="Double click to edit"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              requestEdit();
+            }}
+          >
+            <CuttingDropQtyGrid
+              qtyOnly
+              linePrice={row.price}
+              onExtendedChange={setExtended}
+              sizes={row.sizes}
+              drops={row.drops}
+              cells={row.cells}
+            />
+          </div>
         )}
       </td>
-      <td className="w-32 whitespace-nowrap py-1 pr-2">
-        <div className="flex justify-end">
+      <td className="h-px w-40 whitespace-nowrap pr-2 align-top">
+        <div className="flex h-full flex-col items-start justify-between">
+          <div className="min-w-36 pt-1 [&>div]:flex-nowrap">
           <RowButtons
             editing={editing}
             dirty={dirty}
@@ -447,8 +735,345 @@ function ProductLineRow({ row }: { row: OrderProductLine }) {
                   }
             }
           />
+          </div>
+          <span className="inline-flex min-w-12 shrink-0 items-center justify-center overflow-hidden border border-stone-200 bg-stone-50 px-0.5 py-0 text-xs font-semibold tabular-nums">
+            {usd.format(extended)}
+          </span>
         </div>
       </td>
     </SelectableRow>
+  );
+}
+
+function ChargeLineRow({ row }: { row: OrderProductLine }) {
+  const freight = row.type === PRODUCT_TYPE.freight;
+  const [status, setStatus] = useState(row.status);
+  const [priceText, setPriceText] = useState(() => String(row.price));
+  const [qtyText, setQtyText] = useState(() => String(row.qty ?? 1));
+  const [formKey, setFormKey] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+  const busy = useRef(false);
+  const list = useList();
+  const router = useRouter();
+  const refreshRow = useRefreshRow(row);
+  const id = `${row.customer_order_id}:${row.product_id}`;
+  const dirty =
+    status !== row.status ||
+    priceText !== String(row.price) ||
+    (!freight && qtyText !== String(row.qty ?? 1));
+  const priceNum = Number(priceText);
+  const qtyNum = freight ? 1 : Math.trunc(Number(qtyText));
+  const extended =
+    (Number.isFinite(qtyNum) && qtyNum >= 0 ? qtyNum : 0) *
+    (Number.isFinite(priceNum) && priceNum >= 0 ? priceNum : 0);
+
+  function persist() {
+    return new Promise<boolean>((resolve) => {
+      if (busy.current) {
+        resolve(false);
+        return;
+      }
+      if (!Number.isFinite(priceNum) || priceNum < 0) {
+        setErr(freight ? "Enter a cost." : "Enter a price.");
+        resolve(false);
+        return;
+      }
+      if (!freight && (!Number.isFinite(qtyNum) || qtyNum < 0)) {
+        setErr("Enter a quantity.");
+        resolve(false);
+        return;
+      }
+      busy.current = true;
+      setSaving(true);
+      void (async () => {
+        try {
+          const message = await saveCustomerOrderCharge(
+            row.customer_order_id,
+            row.product_id,
+            status,
+            priceNum,
+            qtyNum,
+          );
+          if (message) {
+            setErr(message);
+            resolve(false);
+            return;
+          }
+          setErr(null);
+          await refreshRow();
+          list.finishEdit(id);
+          resolve(true);
+        } finally {
+          busy.current = false;
+          setSaving(false);
+        }
+      })();
+    });
+  }
+
+  const { editing, requestEdit, requestCancel } = useListRow(id, {
+    dirty,
+    revert: () => {
+      setStatus(row.status);
+      setPriceText(String(row.price));
+      setQtyText(String(row.qty ?? 1));
+      setFormKey((key) => key + 1);
+      setErr(null);
+    },
+    save: persist,
+  });
+
+  useEffect(() => {
+    if (!editing) {
+      setStatus(row.status);
+      setPriceText(String(row.price));
+      setQtyText(String(row.qty ?? 1));
+    }
+  }, [row.status, row.price, row.qty, editing]);
+
+  return (
+    <SelectableRow id={id}>
+      <td className="w-[16%] min-w-0 break-words pr-2">
+        <div className="font-medium leading-tight">{row.label}</div>
+        <div className="mt-1 text-xs leading-tight">
+          {editing ? (
+            <select
+              aria-label="Line status"
+              className="rounded border px-1 py-0.5"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              {LINE_STATUS.map((item) => (
+                <option key={item} value={item}>
+                  {orderStatusLabel(item)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="font-light text-stone-500">{orderStatusLabel(row.status)}</span>
+          )}
+        </div>
+        {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
+      </td>
+      <td className="w-full min-w-0 pr-1">
+        {editing ? (
+          <form key={formKey} className="flex flex-wrap items-end gap-3" onSubmit={(e) => e.preventDefault()}>
+            {freight ? (
+              <label className="block text-sm">
+                <span className="mb-1 block text-stone-500">Cost</span>
+                <PriceInput
+                  name="price"
+                  defaultValue={row.price}
+                  className="w-28 rounded border px-2 py-1"
+                  aria-label="Cost"
+                  onChange={(e) => setPriceText(e.target.value.replace(/[^0-9.]/g, ""))}
+                />
+              </label>
+            ) : (
+              <>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-stone-500">Qty</span>
+                  <NumericInput
+                    name="qty"
+                    defaultValue={row.qty ?? 1}
+                    className="w-28 rounded border px-2 py-1"
+                    aria-label="Quantity"
+                    onChange={(e) => setQtyText(e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-stone-500">Price</span>
+                  <PriceInput
+                    name="price"
+                    defaultValue={row.price}
+                    className="w-28 rounded border px-2 py-1"
+                    aria-label="Price"
+                    onChange={(e) => setPriceText(e.target.value.replace(/[^0-9.]/g, ""))}
+                  />
+                </label>
+              </>
+            )}
+          </form>
+        ) : freight ? (
+          <span className="text-sm tabular-nums">{usd.format(Number(row.price) || 0)}</span>
+        ) : (
+          <span className="text-sm tabular-nums">
+            {Number(row.qty) || 0} × {usd.format(Number(row.price) || 0)}
+          </span>
+        )}
+      </td>
+      <td className="h-px w-40 whitespace-nowrap pr-2 align-top">
+        <div className="flex h-full flex-col items-start justify-between">
+          <div className="min-w-36 pt-1 [&>div]:flex-nowrap">
+            <RowButtons
+              editing={editing}
+              dirty={dirty}
+              saving={saving}
+              deleting={pending}
+              onEdit={requestEdit}
+              onSave={() => void persist()}
+              onCancel={requestCancel}
+              onDelete={
+                editing
+                  ? undefined
+                  : () => {
+                      if (!confirm(`Remove ${row.label}?`)) return;
+                      start(async () => {
+                        const message = await removeCustomerOrderProductId(
+                          row.customer_order_id,
+                          row.product_id,
+                        );
+                        if (message) setErr(message);
+                        else router.refresh();
+                      });
+                    }
+              }
+            />
+          </div>
+          <span className="inline-flex min-w-12 shrink-0 items-center justify-center overflow-hidden border border-stone-200 bg-stone-50 px-0.5 py-0 text-xs font-semibold tabular-nums">
+            {usd.format(editing ? extended : lineExtended(row))}
+          </span>
+        </div>
+      </td>
+    </SelectableRow>
+  );
+}
+
+function PriceExtrasCard({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: OrderProductLine;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [, start] = useTransition();
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (!saving) onClose();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose, saving]);
+
+  function close() {
+    if (saving) return;
+    onClose();
+  }
+
+  function persist() {
+    if (saving) return;
+    const formData = new FormData(formRef.current ?? undefined);
+    const raw = String(formData.get("price") ?? "").trim();
+    const price = Number(raw);
+    if (!raw || !Number.isFinite(price) || price < 0) {
+      setErr("Enter a price.");
+      return;
+    }
+    const upcharges = [...formData.entries()]
+      .filter(([key]) => key.startsWith("up:"))
+      .map(([key, value]) => {
+        const [, sizeId, dropId] = key.split(":");
+        return { size_id: sizeId, drop_id: dropId, amount: Number(value) || 0 };
+      })
+      .filter((item) => item.size_id && item.drop_id);
+    setSaving(true);
+    start(async () => {
+      try {
+        const message = await saveCustomerOrderPrice(
+          row.customer_order_id,
+          row.product_id,
+          price,
+          upcharges,
+        );
+        if (message) {
+          setErr(message);
+          return;
+        }
+        await onSaved();
+        onClose();
+      } finally {
+        setSaving(false);
+      }
+    });
+  }
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-transparent p-4"
+      onClick={close}
+    >
+      <Card
+        className="max-h-[90vh] w-full max-w-3xl overflow-auto shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="min-w-0 font-medium">{row.label}</p>
+          <button
+            type="button"
+            className="rounded border border-stone-300 px-2.5 py-1 text-lg leading-none text-stone-700 hover:bg-stone-100"
+            aria-label="Close"
+            onClick={close}
+          >
+            ×
+          </button>
+        </div>
+        <form
+          ref={formRef}
+          className="space-y-3 text-sm"
+          onInput={() => setDirty(true)}
+          onSubmit={(e) => {
+            e.preventDefault();
+            persist();
+          }}
+        >
+          <label className="block">
+            <span className="mb-1 block text-stone-500">Price</span>
+            <PriceInput
+              name="price"
+              defaultValue={Number(row.price).toFixed(2)}
+              className="w-28 rounded border px-2 py-1"
+              aria-label="Price"
+              onChange={() => setDirty(true)}
+            />
+          </label>
+          {row.sizes.length && row.drops.length ? (
+            <div>
+              <p className="mb-1 text-xs text-teal-800">Size extra on this order</p>
+              <UpchargeMatrix sizes={row.sizes} drops={row.drops} cells={row.cells} />
+            </div>
+          ) : null}
+          {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
+          {dirty || saving ? (
+            <div className="flex items-center gap-2">
+              <Btn type="button" busy={saving} onClick={persist}>
+                Save
+              </Btn>
+              <button
+                type="button"
+                className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-50"
+                onClick={close}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
+        </form>
+      </Card>
+    </div>,
+    document.body,
   );
 }

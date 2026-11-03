@@ -3,7 +3,7 @@ import { requireRoles } from "@/lib/auth";
 import { PageTitle } from "@/components/ui";
 import { CustomerOrdersWorkspace } from "./CustomerOrdersWorkspace";
 import type { CustomerOrderRow } from "./CustomerOrdersTable";
-import type { CatalogChoice, OrderProductLine, SetItem } from "./OrderProductsPanel";
+import type { CatalogChoice, ChargeChoice, OrderProductLine, SetItem } from "./OrderProductsPanel";
 import type { Cell, MatrixDrop, MatrixSize } from "@/components/matrix/QtyMatrix";
 import { asSeasonRows } from "@/lib/season";
 
@@ -47,7 +47,7 @@ export default async function CustomerOrdersPage() {
     .limit(14);
   const { data: lineRows } = await supabase
     .from("customer_order_products")
-    .select("customer_order_id, product_id, price, status, products ( name, models ( name, item_id ) )");
+    .select("customer_order_id, product_id, price, qty, status, products ( name, type, models ( name, item_id ) )");
   const { data: cellRows } = await supabase
     .from("customer_order_cells")
     .select("customer_order_id, product_id, size_id, drop_id, qty, price");
@@ -56,6 +56,13 @@ export default async function CustomerOrdersPage() {
     .select("id, name, models ( name, item_id )")
     .eq("type", 1)
     .eq("is_active", true)
+    .order("name");
+  const { data: chargeRows } = await supabase
+    .from("products")
+    .select("id, type, name, standard_price")
+    .in("type", [2, 3])
+    .eq("is_active", true)
+    .order("type")
     .order("name");
   const productIds = [...new Set((lineRows ?? []).map((line) => line.product_id))];
   const { data: sizeRows } = productIds.length
@@ -118,21 +125,34 @@ export default async function CustomerOrdersPage() {
     cellsByLine.set(key, list);
   }
   const lines: OrderProductLine[] = (lineRows ?? []).map((line) => {
-    const product = one<{ name: string | null; models: { name: string | null } | { name: string | null }[] | null }>(
-      line.products,
-    );
+    const product = one<{
+      name: string | null;
+      type: number | null;
+      models: { name: string | null } | { name: string | null }[] | null;
+    }>(line.products);
     const model = one<{ name: string | null }>(product?.models ?? null);
+    const type = product?.type ?? 1;
     return {
       customer_order_id: line.customer_order_id,
       product_id: line.product_id,
       status: line.status,
+      type,
+      qty: line.qty == null ? null : Number(line.qty),
       price: Number(line.price ?? 0),
-      label: model?.name?.trim() || product?.name?.trim() || "Product",
+      label:
+        product?.name?.trim() ||
+        (type === 1 ? model?.name?.trim() || "Product" : "Charge"),
       sizes: sizesByProduct.get(line.product_id) ?? [],
       drops: dropsByProduct.get(line.product_id) ?? [],
       cells: cellsByLine.get(`${line.customer_order_id}:${line.product_id}`) ?? [],
     };
   });
+  const charges: ChargeChoice[] = (chargeRows ?? []).map((product) => ({
+    id: product.id,
+    type: product.type,
+    price: Number(product.standard_price ?? 0),
+    label: product.name?.trim() || "Charge",
+  }));
   const catalog: CatalogChoice[] = (catalogRows ?? []).map((product) => {
     const model = one<{ name: string | null; item_id: string | null }>(product.models);
     return {
@@ -156,6 +176,7 @@ export default async function CustomerOrdersPage() {
         lines={lines}
         setItems={setItems}
         catalog={catalog}
+        charges={charges}
       />
     </div>
   );

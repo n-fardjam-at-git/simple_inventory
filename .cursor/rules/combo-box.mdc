@@ -16,6 +16,7 @@ When the user says **Combo Box**, use this component. Do not invent another auto
 - **Enter** commits the first remaining list option whose label contains the typed text (case-insensitive, list order; exact match wins). Does not submit a surrounding form. Native datalist cannot highlight that row. If nothing matches, Enter does nothing (`allowAny` keeps the typed text).
 - Unknown typed text is **invalid while shown** (`setCustomValidity`, blocks native submit and Fit List Save). On blur it **reverts** to the last list value (or empty). Do not persist free-typed values that are not on the list.
 - **`allowAny`**: typed text need not be on the list (filter name). Still offers datalist suggestions. Catalog pickers must not set `allowAny`.
+- A **×** sits inside the field on the right and clears the value. The drop Combo Box in a size/drop grid passes `clearable={false}`. An outer clear wrapper hides its own button when this × is present, so the field has one ×.
 - Filter dependent lists in the parent (e.g. ship-to by customer). Remount with `key` when the parent id changes.
 
 ## Use Combo Box for catalogs
