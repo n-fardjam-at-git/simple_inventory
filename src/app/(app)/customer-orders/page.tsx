@@ -47,7 +47,9 @@ export default async function CustomerOrdersPage() {
     .limit(14);
   const { data: lineRows } = await supabase
     .from("customer_order_products")
-    .select("customer_order_id, product_id, price, qty, status, products ( name, type, models ( name, item_id ) )");
+    .select(
+      "customer_order_id, product_id, price, qty, status, products ( name, type, size_chart_id, models ( name, item_id, items ( name ) ) )",
+    );
   const { data: cellRows } = await supabase
     .from("customer_order_cells")
     .select("customer_order_id, product_id, size_id, drop_id, qty, price");
@@ -128,9 +130,26 @@ export default async function CustomerOrdersPage() {
     const product = one<{
       name: string | null;
       type: number | null;
-      models: { name: string | null } | { name: string | null }[] | null;
+      size_chart_id: string | null;
+      models:
+        | {
+            name: string | null;
+            item_id: string | null;
+            items: { name: string | null } | { name: string | null }[] | null;
+          }
+        | {
+            name: string | null;
+            item_id: string | null;
+            items: { name: string | null } | { name: string | null }[] | null;
+          }[]
+        | null;
     }>(line.products);
-    const model = one<{ name: string | null }>(product?.models ?? null);
+    const model = one<{
+      name: string | null;
+      item_id: string | null;
+      items: { name: string | null } | { name: string | null }[] | null;
+    }>(product?.models ?? null);
+    const item = one<{ name: string | null }>(model?.items ?? null);
     const type = product?.type ?? 1;
     return {
       customer_order_id: line.customer_order_id,
@@ -142,6 +161,9 @@ export default async function CustomerOrdersPage() {
       label:
         product?.name?.trim() ||
         (type === 1 ? model?.name?.trim() || "Product" : "Charge"),
+      item_id: model?.item_id ?? null,
+      item_name: item?.name?.trim() || "Item",
+      size_chart_id: product?.size_chart_id ?? null,
       sizes: sizesByProduct.get(line.product_id) ?? [],
       drops: dropsByProduct.get(line.product_id) ?? [],
       cells: cellsByLine.get(`${line.customer_order_id}:${line.product_id}`) ?? [],

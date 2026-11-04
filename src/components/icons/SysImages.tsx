@@ -107,6 +107,97 @@ export function SysPost({ className }: { className?: string }) {
   );
 }
 
+export function SysFreight({ className }: { className?: string }) {
+  const uid = useId().replace(/:/g, "");
+  const cargo = `${uid}-cargo`;
+  const cab = `${uid}-cab`;
+  return (
+    <svg
+      className={`block h-[56px] w-[56px] shrink-0 drop-shadow-md ${className ?? ""}`}
+      viewBox="0 0 56 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Blue freight"
+    >
+      <rect x="6" y="16" width="30" height="22" rx="3" fill={`url(#${cargo})`} />
+      <line x1="12" y1="20" x2="12" y2="34" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+      <line x1="18" y1="20" x2="18" y2="34" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+      <line x1="24" y1="20" x2="24" y2="34" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+      <line x1="30" y1="20" x2="30" y2="34" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M34 22H42C44.2091 22 46.1264 23.4735 46.7082 25.6066L49.1082 34.4066C49.6806 36.5055 48.0931 38.5 45.922 38.5H34V22Z"
+        fill={`url(#${cab})`}
+      />
+      <path d="M38 25H42.2C43.1 25 43.88 25.62 44.1 26.5L45.2 30.5H38V25Z" fill="#E0F2FE" />
+      <rect x="10" y="38" width="36" height="3" fill="#64748B" />
+      <circle cx="16" cy="41" r="5" fill="#334155" />
+      <circle cx="16" cy="41" r="2.5" fill="#BAE6FD" />
+      <circle cx="28" cy="41" r="5" fill="#334155" />
+      <circle cx="28" cy="41" r="2.5" fill="#BAE6FD" />
+      <circle cx="42" cy="41" r="5" fill="#334155" />
+      <circle cx="42" cy="41" r="2.5" fill="#BAE6FD" />
+      <line
+        x1="6"
+        y1="12"
+        x2="22"
+        y2="12"
+        stroke="#38BDF8"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeDasharray="2 4"
+      />
+      <defs>
+        <linearGradient id={cargo} x1="6" y1="16" x2="36" y2="38" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FFFFFF" />
+          <stop offset="1" stopColor="#E2E8F0" />
+        </linearGradient>
+        <linearGradient id={cab} x1="34" y1="22" x2="49" y2="38.5" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#38BDF8" />
+          <stop offset="1" stopColor="#0284C7" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+export function SysSurcharge({ className }: { className?: string }) {
+  const uid = useId().replace(/:/g, "");
+  const paper = `${uid}-paper`;
+  const badge = `${uid}-badge`;
+  return (
+    <svg
+      className={`block h-[56px] w-[56px] shrink-0 drop-shadow-md ${className ?? ""}`}
+      viewBox="0 0 56 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Blue surcharge"
+    >
+      <path
+        d="M12 10C12 7.79086 13.7909 6 16 6H40C42.2091 6 44 7.79086 44 10V48L40 45L36 48L32 45L28 48L24 45L20 48L16 45L12 48V10Z"
+        fill={`url(#${paper})`}
+      />
+      <line x1="18" y1="14" x2="38" y2="14" stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="18" y1="20" x2="30" y2="20" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+      <line x1="18" y1="26" x2="26" y2="26" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="34" cy="34" r="12" fill="#E0F2FE" />
+      <circle cx="34" cy="34" r="10" fill={`url(#${badge})`} />
+      <path d="M34 27L40 33H36.5V40H31.5V33H28L34 27Z" fill="#F0F9FF" />
+      <defs>
+        <linearGradient id={paper} x1="12" y1="6" x2="44" y2="48" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FFFFFF" />
+          <stop offset="1" stopColor="#E2E8F0" />
+        </linearGradient>
+        <linearGradient id={badge} x1="24" y1="24" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#38BDF8" />
+          <stop offset="1" stopColor="#0284C7" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
 export function SysStop({ className }: { className?: string }) {
   return (
     <svg
@@ -201,7 +292,7 @@ export function SysFolder({ className }: { className?: string }) {
         fill="#FFFFFF"
         fontFamily="system-ui, -apple-system, sans-serif"
         fontWeight="700"
-        fontSize="10"
+        fontSize="16"
         textAnchor="middle"
       >
         Open
@@ -227,7 +318,7 @@ export function SysFolderOpen({ className }: { className?: string }) {
         fill="#FFFFFF"
         fontFamily="system-ui, -apple-system, sans-serif"
         fontWeight="700"
-        fontSize="10"
+        fontSize="16"
         textAnchor="middle"
       >
         Open

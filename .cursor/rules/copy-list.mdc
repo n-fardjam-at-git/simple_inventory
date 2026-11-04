@@ -20,3 +20,7 @@ A session snapshot of one product line’s **saved** size/drop qty cells, plus *
 - Fit List of copies: **item**, size/drop matrix, **total**, **Paste** + **Delete**.
 - **Paste** only when the copy’s item and size chart match the opening line. Hide Paste otherwise.
 - Empty target grid pastes immediately (replace). If the line is already sized: **This product is already sized** — **Replace**, **Combine** (same as scale-panel: add qtys; add missing size/drop to the product subset), **Cancel**. After a successful Paste, close the popup. Copies stay until the order panel closes.
+
+## Customer orders
+
+The customer-order products panel uses this same popup on a merchandise row. Freight and surcharge have no **Copy**. Paste writes size/drop quantities on `customer_order_cells` and leaves the line price, size extras, and `qty_shipped`. Replace refuses when a shipped quantity would be cleared. Copies clear when that order’s panel closes or another order is opened.

@@ -13,8 +13,9 @@ import { useRefreshRow } from "@/components/list/useRefreshRow";
 import { UpchargeMatrix, type Cell, type MatrixDrop, type MatrixSize } from "@/components/matrix/QtyMatrix";
 import { NumericInput } from "@/components/NumericInput";
 import { PriceInput } from "@/components/PriceInput";
-import { SysDollar } from "@/components/icons/SysImages";
+import { SysDollar, SysFreight, SysSurcharge } from "@/components/icons/SysImages";
 import { CuttingDropQtyGrid } from "../cutting-orders/CuttingDropQtyGrid";
+import { QtyCopyPopup, snapshotQtyCopy, type QtyCopy } from "../cutting-orders/QtyCopyPopup";
 import { LINE_STATUS, orderStatusLabel } from "@/lib/customer-order";
 import { PRODUCT_TYPE } from "@/lib/product-type";
 import {
@@ -23,6 +24,7 @@ import {
   loadOrderProductDraft,
   removeCustomerOrderProductId,
   saveCustomerOrderCharge,
+  pasteCustomerOrderCells,
   saveCustomerOrderPrice,
   saveCustomerOrderQty,
   type OrderProductDraft,
@@ -36,6 +38,9 @@ export type OrderProductLine = {
   qty: number | null;
   price: number;
   label: string;
+  item_id: string | null;
+  item_name: string;
+  size_chart_id: string | null;
   sizes: MatrixSize[];
   drops: MatrixDrop[];
   cells: Cell[];
@@ -47,6 +52,8 @@ export type SetItem = { id: string; name: string };
 
 const ANY: SetItem = { id: "any", name: "Any" };
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const MONEY =
+  "inline-flex w-20 shrink-0 items-center justify-end overflow-hidden border border-stone-200 bg-stone-50 px-0.5 py-0 text-xs font-semibold tabular-nums";
 
 function lineExtended(row: OrderProductLine) {
   if (row.type !== PRODUCT_TYPE.merchandise) {
@@ -81,15 +88,33 @@ export function OrderProductsPanel({
   charges: ChargeChoice[];
 }) {
   const [pickItemId, setPickItemId] = useState<string | null>(null);
+  const [copyProductId, setCopyProductId] = useState<string | null>(null);
+  const [copies, setCopies] = useState<QtyCopy[]>([]);
+  const sessionOrderId = useRef("");
   const onOrder = new Set(lines.map((line) => line.product_id));
   const choices = catalog.filter((product) => !onOrder.has(product.id));
   const chargeChoices = charges.filter((charge) => !onOrder.has(charge.id));
+  const copyLine =
+    lines.find((line) => line.product_id === copyProductId) ?? null;
 
   useEffect(() => {
-    if (!open) setPickItemId(null);
+    if (!open || !orderId) {
+      setPickItemId(null);
+      setCopyProductId(null);
+      setCopies([]);
+      sessionOrderId.current = "";
+      return;
+    }
+    setPickItemId(null);
+    if (sessionOrderId.current !== orderId) {
+      sessionOrderId.current = orderId;
+      setCopyProductId(null);
+      setCopies([]);
+    }
   }, [open, orderId]);
 
   return (
+    <>
     <DockedPanel
       open={open}
       onClose={onClose}
@@ -128,10 +153,59 @@ export function OrderProductsPanel({
               </div>
             </div>
           </div>
-          <OrderProductTable rows={lines} />
+          <OrderProductTable
+            rows={lines}
+            copyId={copyLine ? `${copyLine.customer_order_id}:${copyLine.product_id}` : null}
+            onCopy={(row) =>
+              setCopyProductId((cur) => (cur === row.product_id ? null : row.product_id))
+            }
+          />
         </div>
       ) : null}
     </DockedPanel>
+    <QtyCopyPopup
+      open={Boolean(open && copyLine)}
+      product={
+        copyLine
+          ? {
+              product_id: copyLine.product_id,
+              item_id: copyLine.item_id,
+              size_chart_id: copyLine.size_chart_id,
+              label: copyLine.label,
+              cells: copyLine.cells,
+            }
+          : null
+      }
+      copies={copies}
+      onCopy={() => {
+        if (!copyLine) return;
+        const snap = snapshotQtyCopy({
+          item_id: copyLine.item_id,
+          size_chart_id: copyLine.size_chart_id,
+          itemName: copyLine.item_name,
+          sizes: copyLine.sizes,
+          drops: copyLine.drops,
+          cells: copyLine.cells,
+        });
+        if (!snap) return;
+        setCopies((cur) => [...cur, snap]);
+      }}
+      onPaste={(copy, mode) => {
+        if (!copyLine) return Promise.resolve("Open a product first.");
+        return pasteCustomerOrderCells(
+          copyLine.customer_order_id,
+          copyLine.product_id,
+          copy.cells,
+          copy.itemId,
+          copy.sizeChartId,
+          mode,
+        );
+      }}
+      onClear={() => setCopies([])}
+      onDelete={(id) => setCopies((cur) => cur.filter((copy) => copy.id !== id))}
+      onClose={() => setCopyProductId(null)}
+    />
+    </>
   );
 }
 
@@ -477,7 +551,15 @@ function ItemPickButton({
   );
 }
 
-function OrderProductTable({ rows }: { rows: OrderProductLine[] }) {
+function OrderProductTable({
+  rows,
+  copyId,
+  onCopy,
+}: {
+  rows: OrderProductLine[];
+  copyId: string | null;
+  onCopy: (row: OrderProductLine) => void;
+}) {
   const items = [...rows].sort((a, b) => {
     if (a.type !== b.type) return a.type - b.type;
     return a.label.localeCompare(b.label, "en", { sensitivity: "base" });
@@ -494,13 +576,17 @@ function OrderProductTable({ rows }: { rows: OrderProductLine[] }) {
             <tr className="text-stone-500">
               <th className="w-[16%] py-1">Product</th>
               <th className="py-1"></th>
-              <th className="w-40 py-1"></th>
+              <th className="w-48 py-1"></th>
             </tr>
           </thead>
         }
         renderRow={(row) =>
           row.type === PRODUCT_TYPE.merchandise ? (
-            <ProductLineRow row={row} />
+            <ProductLineRow
+              row={row}
+              copyOpen={copyId === `${row.customer_order_id}:${row.product_id}`}
+              onCopy={() => onCopy(row)}
+            />
           ) : (
             <ChargeLineRow row={row} />
           )
@@ -523,8 +609,6 @@ function OrderExtendedTotals({ rows }: { rows: OrderProductLine[] }) {
     else merchandise += amount;
   }
   const total = freight + surcharge + merchandise;
-  const box =
-    "inline-flex min-w-12 shrink-0 items-center justify-end overflow-hidden border border-stone-200 bg-stone-50 px-0.5 py-0 text-xs font-semibold tabular-nums";
   const parts = [
     ["Freight", freight],
     ["Surcharge", surcharge],
@@ -532,12 +616,12 @@ function OrderExtendedTotals({ rows }: { rows: OrderProductLine[] }) {
     ["Total", total],
   ] as const;
   return (
-    <div className="mt-2 flex shrink-0 justify-end pr-2">
-      <div className="grid grid-cols-[auto_auto] items-center gap-x-3 gap-y-1">
+    <div className="mt-2 flex shrink-0 justify-end pr-[calc(0.75rem+0.5rem+2px)]">
+      <div className="grid grid-cols-[auto_5rem] items-center gap-x-3 gap-y-1">
         {parts.map(([label, amount]) => (
           <div key={label} className="contents">
             <span className="text-right text-xs text-stone-500">{label}</span>
-            <span className={box}>{usd.format(amount)}</span>
+            <span className={MONEY}>{usd.format(amount)}</span>
           </div>
         ))}
       </div>
@@ -545,7 +629,15 @@ function OrderExtendedTotals({ rows }: { rows: OrderProductLine[] }) {
   );
 }
 
-function ProductLineRow({ row }: { row: OrderProductLine }) {
+function ProductLineRow({
+  row,
+  copyOpen,
+  onCopy,
+}: {
+  row: OrderProductLine;
+  copyOpen: boolean;
+  onCopy: () => void;
+}) {
   const [status, setStatus] = useState(row.status);
   const [matrixDirty, setMatrixDirty] = useState(false);
   const [formKey, setFormKey] = useState(0);
@@ -708,14 +800,25 @@ function ProductLineRow({ row }: { row: OrderProductLine }) {
           </div>
         )}
       </td>
-      <td className="h-px w-40 whitespace-nowrap pr-2 align-top">
-        <div className="flex h-full flex-col items-start justify-between">
-          <div className="min-w-36 pt-1 [&>div]:flex-nowrap">
+      <td className="h-px w-48 pr-2 align-top">
+        <div className="flex h-full flex-col justify-between gap-1 pt-1">
+          <div className="min-w-36">
           <RowButtons
             editing={editing}
             dirty={dirty}
             saving={saving}
             deleting={pending}
+            before={
+              <button
+                type="button"
+                className={`text-xs underline ${
+                  copyOpen ? "font-medium text-teal-800" : "text-stone-700"
+                }`}
+                onClick={onCopy}
+              >
+                Copy
+              </button>
+            }
             onEdit={requestEdit}
             onSave={() => void persist()}
             onCancel={requestCancel}
@@ -736,9 +839,9 @@ function ProductLineRow({ row }: { row: OrderProductLine }) {
             }
           />
           </div>
-          <span className="inline-flex min-w-12 shrink-0 items-center justify-center overflow-hidden border border-stone-200 bg-stone-50 px-0.5 py-0 text-xs font-semibold tabular-nums">
-            {usd.format(extended)}
-          </span>
+          <div className="mt-1 flex justify-end">
+            <span className={MONEY}>{usd.format(extended)}</span>
+          </div>
         </div>
       </td>
     </SelectableRow>
@@ -858,6 +961,22 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
         {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
       </td>
       <td className="w-full min-w-0 pr-1">
+        <div className="flex items-center gap-3">
+          <div
+            className={editing ? undefined : "cursor-pointer"}
+            title={editing ? undefined : "Double click to edit"}
+            onDoubleClick={
+              editing
+                ? undefined
+                : (e) => {
+                    e.stopPropagation();
+                    requestEdit();
+                  }
+            }
+          >
+            {freight ? <SysFreight /> : <SysSurcharge />}
+          </div>
+          <div className="min-w-0">
         {editing ? (
           <form key={formKey} className="flex flex-wrap items-end gap-3" onSubmit={(e) => e.preventDefault()}>
             {freight ? (
@@ -903,10 +1022,12 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
             {Number(row.qty) || 0} × {usd.format(Number(row.price) || 0)}
           </span>
         )}
+          </div>
+        </div>
       </td>
-      <td className="h-px w-40 whitespace-nowrap pr-2 align-top">
-        <div className="flex h-full flex-col items-start justify-between">
-          <div className="min-w-36 pt-1 [&>div]:flex-nowrap">
+      <td className="h-px w-48 pr-2 align-top">
+        <div className="flex h-full min-h-14 flex-col justify-between gap-1 pt-1">
+          <div className="min-w-36 [&>div]:flex-nowrap">
             <RowButtons
               editing={editing}
               dirty={dirty}
@@ -932,9 +1053,9 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
               }
             />
           </div>
-          <span className="inline-flex min-w-12 shrink-0 items-center justify-center overflow-hidden border border-stone-200 bg-stone-50 px-0.5 py-0 text-xs font-semibold tabular-nums">
-            {usd.format(editing ? extended : lineExtended(row))}
-          </span>
+          <div className="mt-1 flex justify-end">
+            <span className={MONEY}>{usd.format(editing ? extended : lineExtended(row))}</span>
+          </div>
         </div>
       </td>
     </SelectableRow>

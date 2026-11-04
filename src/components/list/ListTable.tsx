@@ -274,6 +274,7 @@ export function RowButtons({
   onSave,
   onCancel,
   onDelete,
+  before,
   saving = false,
   deleting = false,
 }: {
@@ -283,13 +284,20 @@ export function RowButtons({
   onSave: () => void;
   onCancel: () => void;
   onDelete?: () => void;
+  /** Extra control in the same chip, before Edit or Save. */
+  before?: ReactNode;
   /** While saving, Working… floats beside Save and another click is ignored. */
   saving?: boolean;
   /** While deleting, Working… floats beside Delete and another click is ignored. */
   deleting?: boolean;
 }) {
   return (
-    <div className="inline-flex flex-wrap items-center gap-2 rounded-md border border-stone-300 bg-stone-50 px-2 py-1">
+    <div
+      className={`inline-flex items-center gap-2 rounded-md border border-stone-300 bg-stone-50 px-2 py-1 ${
+        before ? "flex-nowrap" : "flex-wrap"
+      }`}
+    >
+      {before}
       {(editing && dirty) || saving ? (
         <span className="relative">
           <button

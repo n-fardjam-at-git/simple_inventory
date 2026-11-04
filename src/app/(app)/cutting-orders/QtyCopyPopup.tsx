@@ -9,9 +9,7 @@ import { Btn } from "@/components/ui";
 import { FitList } from "@/components/list/FitList";
 import { SelectableRow } from "@/components/list/ListTable";
 import type { Cell, MatrixDrop, MatrixSize } from "@/components/matrix/QtyMatrix";
-import type { CuttingOrderProductRow } from "./CuttingOrderProductsTable";
 import { CuttingDropQtyGrid } from "./CuttingDropQtyGrid";
-import { pasteSizedCells } from "./scale-actions";
 
 export type QtyCopy = {
   id: string;
@@ -23,15 +21,26 @@ export type QtyCopy = {
   cells: Cell[];
 };
 
-function lineLabel(row: CuttingOrderProductRow) {
-  return row.products?.models?.name?.trim() || row.products?.name?.trim() || "Product";
-}
+export type QtyCopyTarget = {
+  product_id: string;
+  item_id: string | null;
+  size_chart_id: string | null;
+  label: string;
+  cells: { qty?: number | null }[];
+};
 
 function sizedTotal(cells: Cell[]) {
   return cells.reduce((s, c) => s + Number(c.qty ?? 0), 0);
 }
 
-export function snapshotQtyCopy(row: CuttingOrderProductRow): QtyCopy | null {
+export function snapshotQtyCopy(row: {
+  item_id: string | null;
+  size_chart_id: string | null;
+  itemName: string;
+  sizes: MatrixSize[];
+  drops: MatrixDrop[];
+  cells: Cell[];
+}): QtyCopy | null {
   if (!row.item_id || !row.size_chart_id) return null;
   const cells = row.cells.filter((c) => Number(c.qty ?? 0) > 0);
   if (!cells.length) return null;
@@ -39,7 +48,7 @@ export function snapshotQtyCopy(row: CuttingOrderProductRow): QtyCopy | null {
     id: crypto.randomUUID(),
     itemId: row.item_id,
     sizeChartId: row.size_chart_id,
-    itemName: row.products?.models?.items?.name?.trim() || "Item",
+    itemName: row.itemName.trim() || "Item",
     sizes: row.sizes,
     drops: row.drops,
     cells: cells.map((c) => ({
@@ -55,14 +64,16 @@ export function QtyCopyPopup({
   product,
   copies,
   onCopy,
+  onPaste,
   onClear,
   onDelete,
   onClose,
 }: {
   open: boolean;
-  product: CuttingOrderProductRow | null;
+  product: QtyCopyTarget | null;
   copies: QtyCopy[];
   onCopy: () => void;
+  onPaste: (copy: QtyCopy, mode: "replace" | "combine") => Promise<string | null>;
   onClear: () => void;
   onDelete: (id: string) => void;
   onClose: () => void;
@@ -125,14 +136,7 @@ export function QtyCopyPopup({
     setJob(source);
     start(async () => {
       try {
-        const message = await pasteSizedCells(
-          product.cutting_order_id,
-          product.product_id,
-          copy.cells,
-          copy.itemId,
-          copy.sizeChartId,
-          mode,
-        );
+        const message = await onPaste(copy, mode);
         if (message) {
           setErr(message);
           return;
@@ -161,7 +165,7 @@ export function QtyCopyPopup({
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-stone-200 px-4 py-3">
           <p className="min-w-0 truncate text-sm text-stone-800">
             <span className="font-medium">Copy</span>
-            <span className="font-light text-stone-500"> • {lineLabel(product)}</span>
+            <span className="font-light text-stone-500"> • {product.label}</span>
           </p>
           <button
             type="button"

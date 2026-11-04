@@ -1,0 +1,19 @@
+<svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M12 10C12 7.79086 13.7909 6 16 6H40C42.2091 6 44 7.79086 44 10V48L40 45L36 48L32 45L28 48L24 45L20 48L16 45L12 48V10Z" fill="url(#blue-surcharge-receipt)"/>
+  <line x1="18" y1="14" x2="38" y2="14" stroke="#94A3B8" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="18" y1="20" x2="30" y2="20" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round"/>
+  <line x1="18" y1="26" x2="26" y2="26" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="34" cy="34" r="12" fill="#E0F2FE"/>
+  <circle cx="34" cy="34" r="10" fill="url(#blue-surcharge-badge)"/>
+  <path d="M34 27L40 33H36.5V40H31.5V33H28L34 27Z" fill="#F0F9FF"/>
+  <defs>
+    <linearGradient id="blue-surcharge-receipt" x1="12" y1="6" x2="44" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E2E8F0"/>
+    </linearGradient>
+    <linearGradient id="blue-surcharge-badge" x1="24" y1="24" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+</svg>

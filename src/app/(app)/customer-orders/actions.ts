@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LINE_STATUS, parseCommissionPercent, SHIP_AT_ONCE, shipmentMethodLabel, WORKFLOW_STATUS } from "@/lib/customer-order";
+import { PRODUCT_TYPE } from "@/lib/product-type";
 import { parseCellFields } from "@/lib/products";
 
 function blank(value: FormDataEntryValue | null) {
@@ -17,6 +18,20 @@ async function staffId() {
     data: { user },
   } = await supabase.auth.getUser();
   return { supabase, userId: user?.id ?? null };
+}
+
+async function merchandiseBlocksWorkflow(
+  supabase: Awaited<ReturnType<typeof staffId>>["supabase"],
+  orderId: string,
+) {
+  const { data: lines } = await supabase
+    .from("customer_order_products")
+    .select("status, products!inner(type)")
+    .eq("customer_order_id", orderId)
+    .eq("products.type", PRODUCT_TYPE.merchandise);
+  return (lines ?? []).some(
+    (line) => line.status !== "pending" && line.status !== "canceled",
+  );
 }
 
 async function addressFor(
@@ -172,17 +187,10 @@ export async function updateCustomerOrderRow(
   };
   if (patch.status) {
     if (!WORKFLOW_STATUS.includes(patch.status as (typeof WORKFLOW_STATUS)[number])) {
-      return "That status is set from the product lines.";
+      return "That status is set from the merchandise lines.";
     }
-    const { data: lines } = await supabase
-      .from("customer_order_products")
-      .select("status")
-      .eq("customer_order_id", id);
-    const blocking = (lines ?? []).some(
-      (line) => line.status !== "pending" && line.status !== "canceled",
-    );
-    if (blocking) {
-      return "Approved and Picking stay only while every open line is pending.";
+    if (await merchandiseBlocksWorkflow(supabase, id)) {
+      return "Approved and Picking stay only while every open merchandise line is pending.";
     }
     next.status = patch.status;
   }
@@ -244,17 +252,12 @@ export async function updateCustomerOrder(orderId: string, formData: FormData) {
   };
   if (status) {
     if (!WORKFLOW_STATUS.includes(status as (typeof WORKFLOW_STATUS)[number])) {
-      redirect(orderError(orderId, "That status is set from the product lines."));
+      redirect(orderError(orderId, "That status is set from the merchandise lines."));
     }
-    const { data: lines } = await supabase
-      .from("customer_order_products")
-      .select("status")
-      .eq("customer_order_id", orderId);
-    const blocking = (lines ?? []).some(
-      (line) => line.status !== "pending" && line.status !== "canceled",
-    );
-    if (blocking) {
-      redirect(orderError(orderId, "Approved and Picking stay only while every open line is pending."));
+    if (await merchandiseBlocksWorkflow(supabase, orderId)) {
+      redirect(
+        orderError(orderId, "Approved and Picking stay only while every open merchandise line is pending."),
+      );
     }
     patch.status = status;
   }
@@ -530,6 +533,145 @@ export async function saveCustomerOrderQty(
   }
   const { error: delError } = await removing;
   if (delError) return delError.message;
+  revalidatePath(`/customer-orders/${orderId}`);
+  revalidatePath("/customer-orders");
+  return null;
+}
+
+export async function pasteCustomerOrderCells(
+  orderId: string,
+  productId: string,
+  cells: { size_id: string; drop_id: string; qty: number }[],
+  itemId: string,
+  sizeChartId: string,
+  mode: "replace" | "combine" = "replace",
+) {
+  const derived = cells.filter((cell) => Number(cell.qty) > 0);
+  if (!derived.length) return "That copy has no sized qty.";
+  const { supabase } = await staffId();
+  const { data: line, error: lineError } = await supabase
+    .from("customer_order_products")
+    .select("product_id, products ( type, size_chart_id, models ( item_id ) )")
+    .eq("customer_order_id", orderId)
+    .eq("product_id", productId)
+    .maybeSingle();
+  if (lineError) return lineError.message;
+  const product = Array.isArray(line?.products) ? line.products[0] : line?.products;
+  const model = Array.isArray(product?.models) ? product.models[0] : product?.models;
+  const item_id = (model as { item_id?: string | null } | null)?.item_id ?? null;
+  const size_chart_id = (product as { size_chart_id?: string | null } | null)?.size_chart_id ?? null;
+  const type = (product as { type?: number | null } | null)?.type ?? 1;
+  if (!line || type !== 1) return "That line is not merchandise.";
+  if (!item_id || !size_chart_id) return "This product needs an item and a size chart.";
+  if (item_id !== itemId || size_chart_id !== sizeChartId) {
+    return "That copy does not match this product’s item and size chart.";
+  }
+  const { data: sizeRows } = await supabase
+    .from("product_sizes")
+    .select("size_id")
+    .eq("product_id", productId);
+  const { data: dropRows } = await supabase
+    .from("product_drops")
+    .select("drop_id")
+    .eq("product_id", productId);
+  const sizeIds = new Set((sizeRows ?? []).map((row) => row.size_id));
+  const dropIds = new Set((dropRows ?? []).map((row) => row.drop_id));
+  const applied =
+    mode === "combine"
+      ? derived
+      : derived.filter(
+          (cell) =>
+            (!sizeIds.size || sizeIds.has(cell.size_id)) &&
+            (!dropIds.size || dropIds.has(cell.drop_id)),
+        );
+  const { data: existing, error: existingError } = await supabase
+    .from("customer_order_cells")
+    .select("size_id, drop_id, qty, qty_shipped, price")
+    .eq("customer_order_id", orderId)
+    .eq("product_id", productId);
+  if (existingError) return existingError.message;
+  const prev = new Map(
+    (existing ?? []).map((cell) => [`${cell.size_id}:${cell.drop_id}`, cell]),
+  );
+  if (mode === "replace") {
+    const keep = new Set(applied.map((cell) => `${cell.size_id}:${cell.drop_id}`));
+    const blocked = (existing ?? []).some(
+      (cell) => Number(cell.qty_shipped) > 0 && !keep.has(`${cell.size_id}:${cell.drop_id}`),
+    );
+    if (blocked) return "A shipped quantity is still on a drop you removed.";
+  }
+  if (mode === "combine" && applied.length) {
+    const newSizes = [...new Set(applied.map((cell) => cell.size_id))].filter(
+      (id) => !sizeIds.has(id),
+    );
+    const newDrops = [...new Set(applied.map((cell) => cell.drop_id))].filter(
+      (id) => !dropIds.has(id),
+    );
+    if (newSizes.length) {
+      const { error } = await supabase.from("product_sizes").insert(
+        newSizes.map((size_id) => ({ product_id: productId, size_id })),
+      );
+      if (error && error.code !== "23505") return error.message;
+    }
+    if (newDrops.length) {
+      const { error } = await supabase.from("product_drops").insert(
+        newDrops.map((drop_id) => ({ product_id: productId, drop_id })),
+      );
+      if (error && error.code !== "23505") return error.message;
+    }
+    if (newSizes.length || newDrops.length) {
+      const { error: sync } = await supabase.rpc("sync_product_inventory", {
+        p_product_id: productId,
+      });
+      if (sync) return sync.message;
+    }
+  }
+  const rows = applied.map((cell) => {
+    const old = prev.get(`${cell.size_id}:${cell.drop_id}`);
+    const nextQty =
+      mode === "combine" ? Number(old?.qty ?? 0) + Number(cell.qty) : Number(cell.qty);
+    return {
+      customer_order_id: orderId,
+      product_id: productId,
+      size_id: cell.size_id,
+      drop_id: cell.drop_id,
+      qty: nextQty,
+      qty_shipped: Number(old?.qty_shipped ?? 0),
+      price: old?.price ?? null,
+    };
+  });
+  if (rows.length) {
+    const { error } = await supabase.from("customer_order_cells").upsert(rows, {
+      onConflict: "customer_order_id,product_id,size_id,drop_id",
+    });
+    if (error) return error.message;
+  }
+  if (mode === "replace") {
+    const keep = new Set(applied.map((cell) => `${cell.size_id}:${cell.drop_id}`));
+    for (const cell of existing ?? []) {
+      const key = `${cell.size_id}:${cell.drop_id}`;
+      if (keep.has(key) || Number(cell.qty) <= 0) continue;
+      if (cell.price != null) {
+        const { error } = await supabase
+          .from("customer_order_cells")
+          .update({ qty: 0 })
+          .eq("customer_order_id", orderId)
+          .eq("product_id", productId)
+          .eq("size_id", cell.size_id)
+          .eq("drop_id", cell.drop_id);
+        if (error) return error.message;
+        continue;
+      }
+      const { error } = await supabase
+        .from("customer_order_cells")
+        .delete()
+        .eq("customer_order_id", orderId)
+        .eq("product_id", productId)
+        .eq("size_id", cell.size_id)
+        .eq("drop_id", cell.drop_id);
+      if (error) return error.message;
+    }
+  }
   revalidatePath(`/customer-orders/${orderId}`);
   revalidatePath("/customer-orders");
   return null;

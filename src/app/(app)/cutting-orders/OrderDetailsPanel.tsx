@@ -19,7 +19,8 @@ import { LotAddFields } from "@/app/(app)/lots/LotAddFields";
 import { LookupCard } from "@/app/(app)/lots/LookupCard";
 import { addCuttingOrderLot, addCuttingOrderProduct, createLotForOrder } from "./actions";
 import { ScalePanel } from "./ScalePanel";
-import { QtyCopyPopup, snapshotQtyCopy, type QtyCopy } from "./QtyCopyPopup";
+import { QtyCopyPopup, snapshotQtyCopy, type QtyCopy, type QtyCopyTarget } from "./QtyCopyPopup";
+import { pasteSizedCells } from "./scale-actions";
 import {
   NewOrderProductPopup,
   type CatalogModel,
@@ -28,6 +29,17 @@ import {
 import type { SeasonRow } from "@/lib/season";
 
 export type SetItem = { id: string; name: string };
+
+function copyTarget(row: CuttingOrderProductRow | null): QtyCopyTarget | null {
+  if (!row) return null;
+  return {
+    product_id: row.product_id,
+    item_id: row.item_id,
+    size_chart_id: row.size_chart_id,
+    label: row.products?.models?.name?.trim() || row.products?.name?.trim() || "Product",
+    cells: row.cells,
+  };
+}
 
 export type CatalogProduct = {
   id: string;
@@ -131,6 +143,13 @@ export function OrderDetailsPanel({
     );
   }, [open, order?.id, lotIds]);
 
+  const liveCopy = copyProduct
+    ? (productLines.find(
+        (l) =>
+          l.cutting_order_id === copyProduct.cutting_order_id &&
+          l.product_id === copyProduct.product_id,
+      ) ?? copyProduct)
+    : null;
   const lotLines = productLines.filter((l) => l.products?.lots?.id === selectedLotId);
   const unusedLots = catalogLots.filter(
     (l) =>
@@ -282,28 +301,31 @@ export function OrderDetailsPanel({
       />
       <QtyCopyPopup
         open={Boolean(open && copyProduct)}
-        product={
-          copyProduct
-            ? (productLines.find(
-                (l) =>
-                  l.cutting_order_id === copyProduct.cutting_order_id &&
-                  l.product_id === copyProduct.product_id,
-              ) ?? copyProduct)
-            : null
-        }
+        product={copyTarget(liveCopy)}
         copies={copies}
         onCopy={() => {
-          const live = copyProduct
-            ? (productLines.find(
-                (l) =>
-                  l.cutting_order_id === copyProduct.cutting_order_id &&
-                  l.product_id === copyProduct.product_id,
-              ) ?? copyProduct)
-            : null;
-          if (!live) return;
-          const snap = snapshotQtyCopy(live);
+          if (!liveCopy) return;
+          const snap = snapshotQtyCopy({
+            item_id: liveCopy.item_id,
+            size_chart_id: liveCopy.size_chart_id,
+            itemName: liveCopy.products?.models?.items?.name?.trim() || "Item",
+            sizes: liveCopy.sizes,
+            drops: liveCopy.drops,
+            cells: liveCopy.cells,
+          });
           if (!snap) return;
           setCopies((cur) => [...cur, snap]);
+        }}
+        onPaste={(copy, mode) => {
+          if (!liveCopy) return Promise.resolve("Open a product first.");
+          return pasteSizedCells(
+            liveCopy.cutting_order_id,
+            liveCopy.product_id,
+            copy.cells,
+            copy.itemId,
+            copy.sizeChartId,
+            mode,
+          );
         }}
         onClear={() => setCopies([])}
         onDelete={(id) => setCopies((cur) => cur.filter((c) => c.id !== id))}
