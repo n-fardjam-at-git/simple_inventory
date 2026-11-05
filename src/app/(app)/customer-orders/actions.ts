@@ -12,6 +12,16 @@ function blank(value: FormDataEntryValue | null) {
   return text || null;
 }
 
+async function knownTerm(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  term: string | null,
+  kept?: string | null,
+) {
+  if (!term || term === kept) return true;
+  const { data } = await supabase.from("payment_terms").select("term").eq("term", term).maybeSingle();
+  return Boolean(data);
+}
+
 async function staffId() {
   const supabase = await createClient();
   const {
@@ -141,11 +151,12 @@ export async function createCustomerOrder(formData: FormData) {
   }
   const { data: customer } = await supabase
     .from("customers")
-    .select("sales_rep_id, payment_terms ( term )")
+    .select("id, sales_rep_id")
     .eq("id", customerId)
     .maybeSingle();
-  const termJoin = customer?.payment_terms as { term: string } | { term: string }[] | null;
-  const termName = Array.isArray(termJoin) ? termJoin[0]?.term : termJoin?.term;
+  if (!customer) return "Pick a customer.";
+  const chosenTerm = blank(formData.get("terms"));
+  if (!(await knownTerm(supabase, chosenTerm))) return "Pick a term.";
   const { error } = await supabase.from("customer_orders").insert({
     customer_id: customerId,
     start_date: blank(formData.get("start_date")),
@@ -155,15 +166,100 @@ export async function createCustomerOrder(formData: FormData) {
     shipping_method: methods.shipping_method,
     transmission_method_id: methods.transmission_method_id,
     transmission_method: methods.transmission_method,
-    terms: termName ?? null,
+    terms: blank(formData.get("terms")),
     sales_rep_id: customer?.sales_rep_id ?? null,
     created_by: userId,
     updated_by: userId,
+    notes: blank(formData.get("notes")),
     ...addressFields("ship", ship),
     ...addressFields("bill", bill),
   });
   if (error) return error.message;
   revalidatePath("/customer-orders");
+}
+
+export async function saveCustomerOrderHeader(orderId: string, formData: FormData) {
+  const { supabase, userId } = await staffId();
+  const customerId = String(formData.get("customer_id") || "");
+  if (!customerId) return "Pick a customer.";
+  const shipKeep = formData.get("ship_keep") === "1";
+  const billKeep = formData.get("bill_keep") === "1";
+  const ship = shipKeep
+    ? null
+    : await addressFor(
+        supabase,
+        String(formData.get("ship_address_id") || ""),
+        customerId,
+        ["shipping", "both"],
+      );
+  const bill = billKeep
+    ? null
+    : await addressFor(
+        supabase,
+        String(formData.get("bill_address_id") || ""),
+        customerId,
+        ["billing", "both"],
+      );
+  if (ship === undefined) return "Ship-to must be a shipping address for this customer.";
+  if (bill === undefined) return "Bill-to must be a billing address for this customer.";
+  const methods = await chosenMethods(supabase, formData);
+  if (methods.error) return methods.error;
+  const futureSeason = blank(formData.get("future_season"));
+  if (futureSeason && futureSeason !== SHIP_AT_ONCE) {
+    const { data: season } = await supabase
+      .from("seasons")
+      .select("season")
+      .eq("season", futureSeason)
+      .maybeSingle();
+    if (!season) return "Pick a season.";
+  }
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("id, sales_rep_id")
+    .eq("id", customerId)
+    .maybeSingle();
+  if (!customer) return "Pick a customer.";
+  const { data: current } = await supabase
+    .from("customer_orders")
+    .select(
+      "shipment_method_id, shipping_method, transmission_method_id, transmission_method, terms",
+    )
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!current) return "That order is gone.";
+  const chosenTerm = blank(formData.get("terms"));
+  if (!(await knownTerm(supabase, chosenTerm, current.terms))) return "Pick a term.";
+  const patch: Record<string, unknown> = {
+    customer_id: customerId,
+    sales_rep_id: customer.sales_rep_id,
+    start_date: blank(formData.get("start_date")),
+    cancel_date: blank(formData.get("cancel_date")),
+    future_season: futureSeason,
+    terms: blank(formData.get("terms")),
+    notes: blank(formData.get("notes")),
+    updated_by: userId,
+    updated_at: new Date().toISOString(),
+  };
+  if (formData.get("method_keep") === "1") {
+    patch.shipment_method_id = current.shipment_method_id;
+    patch.shipping_method = current.shipping_method;
+  } else {
+    patch.shipment_method_id = methods.shipment_method_id;
+    patch.shipping_method = methods.shipping_method;
+  }
+  if (formData.get("received_keep") === "1") {
+    patch.transmission_method_id = current.transmission_method_id;
+    patch.transmission_method = current.transmission_method;
+  } else {
+    patch.transmission_method_id = methods.transmission_method_id;
+    patch.transmission_method = methods.transmission_method;
+  }
+  if (!shipKeep) Object.assign(patch, addressFields("ship", ship));
+  if (!billKeep) Object.assign(patch, addressFields("bill", bill));
+  const { error } = await supabase.from("customer_orders").update(patch).eq("id", orderId);
+  if (error) return error.message;
+  revalidatePath("/customer-orders");
+  revalidatePath(`/customer-orders/${orderId}`);
 }
 
 export async function updateCustomerOrderRow(
@@ -198,6 +294,53 @@ export async function updateCustomerOrderRow(
   if (error) return error.message;
   revalidatePath("/customer-orders");
   revalidatePath(`/customer-orders/${id}`);
+}
+
+export async function approveCustomerOrder(orderId: string) {
+  const { supabase, userId } = await staffId();
+  const { data: order } = await supabase
+    .from("customer_orders")
+    .select("status")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return "That order is gone.";
+  if (order.status !== "pending") return "Approve stays only while the order is pending.";
+  if (await merchandiseBlocksWorkflow(supabase, orderId)) {
+    return "Approved and Picking stay only while every open merchandise line is pending.";
+  }
+  const { error } = await supabase
+    .from("customer_orders")
+    .update({
+      status: "approved",
+      updated_by: userId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orderId);
+  if (error) return error.message;
+  revalidatePath("/customer-orders");
+  revalidatePath(`/customer-orders/${orderId}`);
+}
+
+export async function revokeCustomerOrder(orderId: string) {
+  const { supabase, userId } = await staffId();
+  const { data: order } = await supabase
+    .from("customer_orders")
+    .select("status")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return "That order is gone.";
+  if (order.status !== "approved") return "Revoke stays only while the order is approved.";
+  const { error } = await supabase
+    .from("customer_orders")
+    .update({
+      status: "pending",
+      updated_by: userId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orderId);
+  if (error) return error.message;
+  revalidatePath("/customer-orders");
+  revalidatePath(`/customer-orders/${orderId}`);
 }
 
 export async function deleteCustomerOrder(id: string) {

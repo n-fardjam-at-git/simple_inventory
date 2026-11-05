@@ -326,3 +326,157 @@ export function SysFolderOpen({ className }: { className?: string }) {
     </SysImage>
   );
 }
+
+export function SysApprove({ className }: { className?: string }) {
+  const uid = useId().replace(/:/g, "");
+  const base = `${uid}-approve-base`;
+  const top = `${uid}-approve-top`;
+  return (
+    <svg
+      className={`block h-14 w-[170px] shrink-0 drop-shadow-md ${className ?? ""}`}
+      viewBox="0 0 170 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <rect x="6" y="6" width="158" height="44" rx="14" fill={`url(#${base})`} />
+      <rect x="9" y="9" width="152" height="38" rx="11" fill={`url(#${top})`} fillOpacity="0.9" />
+      <text
+        x="24"
+        y="33"
+        fill="#78350F"
+        fontFamily="system-ui, -apple-system, sans-serif"
+        fontWeight="800"
+        fontSize="16"
+        letterSpacing="0.75"
+      >
+        APPROVE
+      </text>
+      <text
+        x="24"
+        y="31.5"
+        fill="#FFFFFF"
+        fontFamily="system-ui, -apple-system, sans-serif"
+        fontWeight="800"
+        fontSize="16"
+        letterSpacing="0.75"
+      >
+        APPROVE
+      </text>
+      <circle cx="140" cy="28" r="14" fill="#78350F" opacity="0.2" />
+      <path
+        d="M132.5 28.5L137.5 33.5L147.5 22.5"
+        stroke="#78350F"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M132.5 27L137.5 32L147.5 21"
+        stroke="#FFFBEB"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <defs>
+        <linearGradient id={base} x1="6" y1="6" x2="164" y2="50" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#D97706" />
+          <stop offset="1" stopColor="#92400E" />
+        </linearGradient>
+        <linearGradient id={top} x1="9" y1="9" x2="161" y2="47" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FDE68A" />
+          <stop offset="1" stopColor="#F59E0B" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+export function SysApproved({ className }: { className?: string }) {
+  return (
+    <svg
+      className={`block h-14 w-[170px] shrink-0 ${className ?? ""}`}
+      viewBox="0 0 170 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <rect x="4" y="4" width="162" height="48" rx="12" fill="#FEF3C7" />
+      <rect
+        x="7"
+        y="7"
+        width="156"
+        height="42"
+        rx="9"
+        stroke="#D97706"
+        strokeWidth="2"
+        strokeDasharray="4 2"
+        fill="#FDE68A"
+        fillOpacity="0.4"
+      />
+      <text
+        x="24"
+        y="33"
+        fill="#B45309"
+        fontFamily="system-ui, -apple-system, sans-serif"
+        fontWeight="700"
+        fontSize="16"
+        letterSpacing="0.5"
+      >
+        Approved
+      </text>
+      <circle cx="138" cy="28" r="11" fill="#B45309" />
+      <path
+        d="M133 28L136.5 31.5L143 24.5"
+        stroke="#FFFBEB"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function SysRevoke({ className }: { className?: string }) {
+  return (
+    <svg
+      className={`block h-14 w-[170px] shrink-0 ${className ?? ""}`}
+      viewBox="0 0 170 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <rect x="4" y="4" width="162" height="48" rx="12" fill="#FEF3C7" />
+      <rect
+        x="7"
+        y="7"
+        width="156"
+        height="42"
+        rx="9"
+        stroke="#D97706"
+        strokeWidth="2"
+        strokeDasharray="4 2"
+        fill="#FDE68A"
+        fillOpacity="0.4"
+      />
+      <text
+        x="24"
+        y="33"
+        fill="#B45309"
+        fontFamily="system-ui, -apple-system, sans-serif"
+        fontWeight="700"
+        fontSize="16"
+        letterSpacing="0.5"
+      >
+        Revoke
+      </text>
+      <circle cx="138" cy="28" r="11" fill="#B45309" />
+      <path
+        d="M133 23L143 33M143 23L133 33"
+        stroke="#FFFBEB"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}

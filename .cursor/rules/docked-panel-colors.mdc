@@ -1,0 +1,19 @@
+---
+description: Docked panel colors — slate for a left filter dock, muted amber for a right details dock.
+alwaysApply: true
+---
+
+# Docked panel colors
+
+Whenever a page has a left or a right slide-over panel, the two sides use different muted, opaque canvases so they are told apart at a glance. Do not pick a new color per page.
+
+| Side | Use | Edge | Card | Reference |
+| --- | --- | --- | --- | --- |
+| **Left** | Filter | `bg-slate-100` | `rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm` | `DockedFilterPanel`, lots aside |
+| **Right** | Details, products, addresses, scale | `bg-[#eee8d3]` (very light muted amber) | `rounded-lg border border-[#ddd5bb] bg-[#f8f5e8] p-4 shadow-sm` | `DockedPanel` |
+
+- No transparency on the panel or its card. The page must not show through.
+- The card carries `dock-panel`. `globals.css` keeps every `input`, `select`, and `textarea` inside it white. Checkboxes, radios, and buttons keep their own styling.
+- Boxes inside the panel stay white: Fit List, Add a product, popups, Combo lists.
+- Reuse `DockedFilterPanel` and `DockedPanel` instead of a new aside. If a page must build its own aside, copy these classes exactly.
+- A nested right dock (scale panel over order details) uses the same amber.

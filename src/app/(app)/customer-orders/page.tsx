@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/auth";
-import { PageTitle } from "@/components/ui";
 import { CustomerOrdersWorkspace } from "./CustomerOrdersWorkspace";
 import type { CustomerOrderRow } from "./CustomerOrdersTable";
 import type { CatalogChoice, ChargeChoice, OrderProductLine, SetItem } from "./OrderProductsPanel";
@@ -16,11 +15,35 @@ export default async function CustomerOrdersPage() {
   const supabase = await createClient();
   const { data: orders } = await supabase
     .from("customer_orders")
-    .select("id, order_no, customer_id, status, start_date, customers ( account_no, company_name, account_number )")
+    .select(
+      "id, order_no, created_at, customer_id, status, start_date, cancel_date, future_season, terms, shipment_method_id, shipping_method, transmission_method_id, transmission_method, sales_rep_id, created_by, notes, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country, customers ( account_no, company_name, account_number ), shipment_methods ( shipper, method ), transmission_methods ( name )",
+    )
     .order("order_no", { ascending: false });
+  const peopleIds = [
+    ...new Set(
+      (orders ?? [])
+        .flatMap((order) => [order.sales_rep_id, order.created_by])
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const { data: people } = peopleIds.length
+    ? await supabase.from("profiles").select("id, display_name").in("id", peopleIds)
+    : { data: [] as { id: string; display_name: string }[] };
+  const personName = (id: string | null) =>
+    (people ?? []).find((person) => person.id === id)?.display_name?.trim() || null;
+  const addressLines = (order: Record<string, unknown>, prefix: "ship" | "bill") => {
+    const text = (key: string) => {
+      const value = order[`${prefix}_${key}`];
+      return typeof value === "string" ? value.trim() : "";
+    };
+    const cityLine = [text("city"), [text("region"), text("postal_code")].filter(Boolean).join(" ")]
+      .filter(Boolean)
+      .join(", ");
+    return [text("address_line1"), text("address_line2"), cityLine, text("country")].filter(Boolean);
+  };
   const { data: customers } = await supabase
     .from("customers")
-    .select("id, account_no, company_name, account_number")
+    .select("id, account_no, company_name, account_number, payment_terms ( term )")
     .eq("is_active", true)
     .order("company_name");
   const { data: addresses } = await supabase
@@ -36,6 +59,10 @@ export default async function CustomerOrdersPage() {
     .select("id, name")
     .eq("is_active", true)
     .order("sort_order");
+  const { data: paymentTerms } = await supabase
+    .from("payment_terms")
+    .select("term, days_due")
+    .order("term");
   const { data: seasons } = await supabase
     .from("seasons")
     .select("id, year, start_season, is_combo, season");
@@ -52,7 +79,7 @@ export default async function CustomerOrdersPage() {
     );
   const { data: cellRows } = await supabase
     .from("customer_order_cells")
-    .select("customer_order_id, product_id, size_id, drop_id, qty, price");
+    .select("customer_order_id, product_id, size_id, drop_id, qty, qty_shipped, price");
   const { data: catalogRows } = await supabase
     .from("products")
     .select("id, name, models ( name, item_id )")
@@ -80,21 +107,66 @@ export default async function CustomerOrdersPage() {
         .in("product_id", productIds)
     : { data: [] };
 
+  const merchandiseLine = new Set(
+    (lineRows ?? [])
+      .filter((line) => {
+        const product = one<{ type: number | null }>(line.products);
+        return (product?.type ?? 1) === 1;
+      })
+      .map((line) => `${line.customer_order_id}:${line.product_id}`),
+  );
+  const leftByOrder = new Map<string, number>();
+  for (const cell of cellRows ?? []) {
+    const key = `${cell.customer_order_id}:${cell.product_id}`;
+    if (!merchandiseLine.has(key)) continue;
+    const left = Number(cell.qty ?? 0) - Number(cell.qty_shipped ?? 0);
+    leftByOrder.set(cell.customer_order_id, (leftByOrder.get(cell.customer_order_id) ?? 0) + left);
+  }
+
   const rows: CustomerOrderRow[] = (orders ?? []).map((order) => {
-    const customer = order.customers as unknown as {
+    const customer = one<{
       account_no: number;
       company_name: string;
       account_number: string | null;
-    } | null;
+    }>(order.customers);
+    const shipmentMethod = one<{ shipper: string | null; method: string }>(order.shipment_methods);
+    const transmissionMethod = one<{ name: string }>(order.transmission_methods);
     return {
       id: order.id,
       order_no: order.order_no,
+      created_date: order.created_at ? String(order.created_at).slice(0, 10) : null,
       customer_id: order.customer_id,
       customer: customer?.company_name ?? "",
       account_no: customer?.account_no ?? null,
       account: customer?.account_number ?? "—",
       start_date: order.start_date,
+      cancel_date: order.cancel_date ?? null,
       status: order.status,
+      left_to_ship:
+        order.status === "complete" || order.status === "canceled"
+          ? 0
+          : Math.max(0, leftByOrder.get(order.id) ?? 0),
+      future_season: order.future_season ?? null,
+      terms: order.terms ?? null,
+      shipment_method_id: order.shipment_method_id ?? null,
+      shipping_method:
+        order.shipping_method?.trim() ||
+        (shipmentMethod
+          ? shipmentMethod.shipper
+            ? `${shipmentMethod.shipper} · ${shipmentMethod.method}`
+            : shipmentMethod.method
+          : null),
+      transmission_method_id: order.transmission_method_id ?? null,
+      transmission_method: order.transmission_method?.trim() || transmissionMethod?.name || null,
+      sales_rep: personName(order.sales_rep_id),
+      created_by: personName(order.created_by),
+      notes: order.notes ?? null,
+      ship_line1: order.ship_address_line1 ?? null,
+      ship_city: order.ship_city ?? null,
+      bill_line1: order.bill_address_line1 ?? null,
+      bill_city: order.bill_city ?? null,
+      ship_to: addressLines(order as Record<string, unknown>, "ship"),
+      bill_to: addressLines(order as Record<string, unknown>, "bill"),
     };
   });
 
@@ -115,6 +187,7 @@ export default async function CustomerOrdersPage() {
     dropsByProduct.set(row.product_id, list);
   }
   const cellsByLine = new Map<string, Cell[]>();
+  const shippedByLine = new Map<string, number>();
   for (const cell of cellRows ?? []) {
     const key = `${cell.customer_order_id}:${cell.product_id}`;
     const list = cellsByLine.get(key) ?? [];
@@ -125,6 +198,7 @@ export default async function CustomerOrdersPage() {
       upcharge: cell.price == null ? 0 : Number(cell.price),
     });
     cellsByLine.set(key, list);
+    shippedByLine.set(key, (shippedByLine.get(key) ?? 0) + Number(cell.qty_shipped ?? 0));
   }
   const lines: OrderProductLine[] = (lineRows ?? []).map((line) => {
     const product = one<{
@@ -166,6 +240,11 @@ export default async function CustomerOrdersPage() {
       size_chart_id: product?.size_chart_id ?? null,
       sizes: sizesByProduct.get(line.product_id) ?? [],
       drops: dropsByProduct.get(line.product_id) ?? [],
+      ordered: (cellsByLine.get(`${line.customer_order_id}:${line.product_id}`) ?? []).reduce(
+        (sum, cell) => sum + Number(cell.qty || 0),
+        0,
+      ),
+      shipped: shippedByLine.get(`${line.customer_order_id}:${line.product_id}`) ?? 0,
       cells: cellsByLine.get(`${line.customer_order_id}:${line.product_id}`) ?? [],
     };
   });
@@ -187,14 +266,23 @@ export default async function CustomerOrdersPage() {
 
   return (
     <div>
-      <PageTitle title="Customer orders" />
       <CustomerOrdersWorkspace
         rows={rows}
-        customers={customers ?? []}
+        customers={(customers ?? []).map((customer) => ({
+          id: customer.id,
+          account_no: customer.account_no,
+          company_name: customer.company_name,
+          account_number: customer.account_number,
+          term: one<{ term: string }>(customer.payment_terms)?.term ?? null,
+        }))}
         addresses={addresses ?? []}
         shipmentMethods={shipmentMethods ?? []}
         transmissionMethods={transmissionMethods ?? []}
         seasons={asSeasonRows(seasons ?? [])}
+        terms={(paymentTerms ?? []).map((term) => ({
+          term: term.term,
+          days_due: term.days_due,
+        }))}
         lines={lines}
         setItems={setItems}
         catalog={catalog}

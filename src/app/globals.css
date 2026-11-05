@@ -8,6 +8,11 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+/* Docked panels sit on a tinted canvas; keep every text control white. */
+.dock-panel :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  background-color: #fff;
+}
+
 .list-table {
   border-collapse: separate;
   border-spacing: 0 0.5rem;

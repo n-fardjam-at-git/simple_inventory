@@ -1,0 +1,7 @@
+<svg viewBox="0 0 170 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="4" y="4" width="162" height="48" rx="12" fill="#FEF3C7"/>
+  <rect x="7" y="7" width="156" height="42" rx="9" stroke="#D97706" stroke-width="2" stroke-dasharray="4 2" fill="#FDE68A" fill-opacity="0.4"/>
+  <text x="24" y="33" fill="#B45309" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="16" letter-spacing="0.5">Revoke</text>
+  <circle cx="138" cy="28" r="11" fill="#B45309"/>
+  <path d="M133 23L143 33M143 23L133 33" stroke="#FFFBEB" stroke-width="3" stroke-linecap="round"/>
+</svg>

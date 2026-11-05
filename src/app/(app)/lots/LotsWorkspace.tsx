@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
-import { PageTitle, Card, Btn } from "@/components/ui";
+import { PageTitle, Btn } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
 import { FitPage } from "@/components/list/FitList";
 import { AddForm } from "@/components/AddForm";
@@ -186,13 +186,13 @@ export function LotsWorkspace({
       ) : null}
 
       <aside
-        className={`fixed bottom-0 left-0 z-50 flex w-[30%] flex-col bg-stone-50 p-4 shadow-[8px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-300 ${
+        className={`fixed bottom-0 left-0 z-50 flex w-[30%] flex-col bg-slate-100 p-4 shadow-[8px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-300 ${
           open ? "translate-x-0" : "pointer-events-none -translate-x-full"
         }`}
         style={{ top: headerBottom }}
         aria-hidden={!open}
       >
-        <Card className="flex min-h-0 flex-1 flex-col">
+        <div className="dock-panel flex min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-medium">Filter</h2>
           <button
@@ -342,7 +342,7 @@ export function LotsWorkspace({
             </button>
           </div>
         </form>
-        </Card>
+        </div>
       </aside>
 
       <FitPage>

@@ -1,0 +1,28 @@
+---
+description: Customer-order print — letter 8.5×11 sales order report for one customer order.
+alwaysApply: false
+---
+
+# Customer-order print
+
+Reference: `src/app/(app)/customer-orders/[id]/print/` (**Print** on the Order details container of `/customer-orders`). Data: `src/lib/customer-order-report.ts`. Page-count chrome: `src/components/print/PrintActions.tsx`. Staff only (admin, warehouse, sales rep).
+
+When the user says **customer-order-print**, reuse this instead of a PDF export or a new report layout.
+
+## Paper and chrome
+
+- US letter **portrait 8.5×11**, **0.5in** margins. New tab; Print / Close; auto-open the print dialog.
+- **Page 1:** company name centered, then **Order {n} · {customer} · {page} of {pages}**, then the header block.
+- **Later pages:** the same Order / customer head only (table `thead`). Product blocks flow and may split; `break-inside-avoid` on each matrix.
+
+## Header block
+
+Label / value lines. **Order information:** customer, terms, shipping method, season (**Ship at once** or the season name), status, start date, cancel date. No account, Sage, or processing block (received via, rep, who entered or updated). Under it **Ship to** and **Bill to**, each with the customer name over the snapshot address lines. Notes last when present. Dates print as `MM/DD/YYYY`.
+
+## Body
+
+- One boxed block per **merchandise** line, sorted by product name. Bar: product name, line status in a thin font, line price on the right. Under it: article · model · item, then the lot's color, pattern, and content. **variable-size/drop-matrix** full width: all product sizes; only drops with qty. A cell with a size extra prints the extra under the qty in amber (`+5.00`). Row totals. Footer line: **Total {ordered} · Shipped {shipped} · Extended {usd}**. No sized cells: **Not sized**.
+- **Charges** box after the merchandise: one row per freight or surcharge line with type, status, qty (blank for freight), price, extended.
+- **Order summary** box: merchandise products, units, amount, surcharge quantity, surcharge, freight, shipped quantity, shipped value, **Grand total**. Canceled lines print with their status but are left out of every summary amount, the same as the products panel.
+
+Shipped quantity and shipped value are 0 until a customer shipment writes `qty_shipped`. Do not switch this report to landscape unless asked.

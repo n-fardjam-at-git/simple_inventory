@@ -41,6 +41,8 @@ export type OrderProductLine = {
   item_id: string | null;
   item_name: string;
   size_chart_id: string | null;
+  ordered: number;
+  shipped: number;
   sizes: MatrixSize[];
   drops: MatrixDrop[];
   cells: Cell[];
@@ -73,6 +75,7 @@ export function OrderProductsPanel({
   onClose,
   orderId,
   orderNo,
+  customer,
   lines,
   setItems,
   catalog,
@@ -82,6 +85,7 @@ export function OrderProductsPanel({
   onClose: () => void;
   orderId: string | null;
   orderNo: number | null;
+  customer: string | null;
   lines: OrderProductLine[];
   setItems: SetItem[];
   catalog: CatalogChoice[];
@@ -118,7 +122,11 @@ export function OrderProductsPanel({
     <DockedPanel
       open={open}
       onClose={onClose}
-      title={orderNo != null ? String(orderNo) : "Order"}
+      title={
+        orderNo != null
+          ? `${customer?.trim() || "Order"} · Order No ${orderNo}`
+          : customer?.trim() || "Order"
+      }
       side="right"
       width="95%"
     >
@@ -729,7 +737,7 @@ function ProductLineRow({
             </button>
           ) : null}
         </div>
-        <div className="mt-1 text-xs leading-tight">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs leading-tight">
           {editing ? (
             <select
               aria-label="Line status"
@@ -746,6 +754,9 @@ function ProductLineRow({
           ) : (
             <span className="font-light text-stone-500">{orderStatusLabel(row.status)}</span>
           )}
+          <span className="font-light text-stone-500">
+            {row.shipped} of {row.ordered}
+          </span>
         </div>
         {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
         {priceOpen ? (

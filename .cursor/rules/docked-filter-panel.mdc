@@ -16,7 +16,8 @@ When the user says **docked-filter-panel** (or docked filter), reuse this instea
 - Top edge is **below the white header + nav**, in the light gray (`bg-stone-50`) content area. Header stays visible.
 - Overlay is **transparent** (click it to close). Panel has a **drop shadow** onto the page.
 - Close with ×, overlay click, or Escape.
-- Panel canvas matches the page: `bg-stone-50` padding, inner **Card** (`rounded-lg border border-stone-200 bg-white shadow-sm`), same headings and field chrome as the rest of the page.
+- Panel canvas is a cool muted tint so it reads apart from a details dock: `bg-slate-100` padding, inner card `rounded-lg border border-slate-200 bg-slate-50 shadow-sm`, same headings and field chrome as the rest of the page. Details docks (`DockedPanel`) are a very light muted amber, fully opaque: `bg-[#eee8d3]` padding and a `bg-[#f8f5e8]` card with a `border-[#ddd5bb]` edge, so the white Fit List and boxes stand on it. Both cards carry `dock-panel`; `globals.css` keeps every input, select, and textarea inside them white. The lots page has its own aside and uses the same slate classes.
+- `side="right"` is available but the default, and every current filter, is left.
 - Footer: **Filter** (`Btn`) applies and **keeps the panel open**; **Reset** clears fields and the applied filter.
 
 ## Apply state

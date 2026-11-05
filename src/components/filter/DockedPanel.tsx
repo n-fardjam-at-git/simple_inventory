@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
-import { Card } from "@/components/ui";
 
 export function DockedPanel({
   open,
@@ -67,7 +66,7 @@ export function DockedPanel({
         />
       ) : null}
       <aside
-        className={`fixed bottom-0 flex flex-col bg-stone-50 p-4 transition-transform duration-300 ${
+        className={`fixed bottom-0 flex flex-col bg-[#eee8d3] p-4 transition-transform duration-300 ${
           nested ? "z-[60]" : "z-50"
         } ${
           fromRight
@@ -83,7 +82,7 @@ export function DockedPanel({
         style={{ top: headerBottom, width }}
         aria-hidden={!open}
       >
-        <Card className="flex min-h-0 flex-1 flex-col">
+        <div className="dock-panel flex min-h-0 flex-1 flex-col rounded-lg border border-[#ddd5bb] bg-[#f8f5e8] p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <div className="min-w-0">
               <h2 className="font-medium">{title}</h2>
@@ -103,7 +102,7 @@ export function DockedPanel({
           <div data-clip="" className="flex min-h-0 flex-1 flex-col overflow-hidden text-sm">
             {children}
           </div>
-        </Card>
+        </div>
       </aside>
     </>
   );

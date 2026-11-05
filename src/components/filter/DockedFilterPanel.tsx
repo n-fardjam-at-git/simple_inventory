@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
-import { Card, Btn } from "@/components/ui";
+import { Btn } from "@/components/ui";
 
 export function filterToggleClass(isFiltered: boolean) {
   return isFiltered
@@ -15,6 +15,7 @@ export function DockedFilterPanel({
   onApply,
   onReset,
   comboKey,
+  side = "left",
   children,
 }: {
   open: boolean;
@@ -22,6 +23,7 @@ export function DockedFilterPanel({
   onApply: () => void;
   onReset: () => void;
   comboKey: number;
+  side?: "left" | "right";
   children: ReactNode;
 }) {
   const [headerBottom, setHeaderBottom] = useState(0);
@@ -50,6 +52,8 @@ export function DockedFilterPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const fromRight = side === "right";
+
   return (
     <>
       {open ? (
@@ -62,13 +66,21 @@ export function DockedFilterPanel({
         />
       ) : null}
       <aside
-        className={`fixed bottom-0 left-0 z-50 flex w-[30%] flex-col bg-stone-50 p-4 shadow-[8px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-300 ${
-          open ? "translate-x-0" : "pointer-events-none -translate-x-full"
+        className={`fixed bottom-0 z-50 flex w-[30%] flex-col bg-slate-100 p-4 transition-transform duration-300 ${
+          fromRight
+            ? "right-0 shadow-[-8px_0_24px_rgba(0,0,0,0.12)]"
+            : "left-0 shadow-[8px_0_24px_rgba(0,0,0,0.12)]"
+        } ${
+          open
+            ? "translate-x-0"
+            : fromRight
+              ? "pointer-events-none translate-x-full"
+              : "pointer-events-none -translate-x-full"
         }`}
         style={{ top: headerBottom }}
         aria-hidden={!open}
       >
-        <Card className="flex min-h-0 flex-1 flex-col">
+        <div className="dock-panel flex min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-medium">Filter</h2>
             <button
@@ -101,7 +113,7 @@ export function DockedFilterPanel({
               </button>
             </div>
           </form>
-        </Card>
+        </div>
       </aside>
     </>
   );

@@ -17,7 +17,7 @@ When the user says **order-details-panel**, reuse this instead of a modal, a new
 - Top edge is **below the white header + nav**, in the light gray (`bg-stone-50`) content area. Header stays visible.
 - Overlay is **transparent** (click it to close). Panel has a **drop shadow** onto the page (from the left edge of the panel).
 - Close with ×, overlay click, or Escape.
-- Panel canvas matches the page: `bg-stone-50` padding, inner **Card**, same headings and field chrome as the rest of the page.
+- Panel canvas is the **docked-panel-colors** details amber: `bg-[#eee8d3]` padding, inner card `border-[#ddd5bb] bg-[#f8f5e8]`, white Fit List and controls on it, same headings and field chrome as the rest of the page.
 - Title is the serial **order_num** (number only).
 - Top of the panel: **add-product** (see that rule) on the **right**, only after a lot is selected. Combo is order brand **and** the selected lot. **New** creates catalog merchandise for that lot (does not attach until Add). Inserts `cutting_order_products`.
 - A cutting order belongs to **one brand**. Brand cannot change if the order has **lots or products**.
