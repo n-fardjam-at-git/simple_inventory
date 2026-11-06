@@ -10,6 +10,7 @@ When the user asks for this sheet, **print it in the reply** (do not only follow
 | Name | What it is |
 | --- | --- |
 | **Fit List** | Selectable catalog list: one selected row, single-row edit, dirty leave prompt, bordered rows, boxed Edit/Save/Cancel/Delete. After insert: select the new row, or the last row if several were added. Paged variant fits as many rows as the viewport. |
+| **fit-list+details** | Fit List on the left and a details container for the selected row on the right, each 50% wide (customer orders, customers). Rows have no buttons. The details header has the icon controls, a divider, then Edit and Delete in the Fit List chip. The body is bordered groups with highlighted block headers and compact facts. Nothing selected reads **Select a …**. Keeps every Fit List rule. |
 | **Working…** | Floats beside the button that is writing to the database. Label stays; another click is ignored until the write finishes. Left of list-row Save/Delete; right of left-aligned Add/Create. Not on Filter, Reset, Cancel, Open, or print. |
 | **Combo Box** | Native type-to-filter picker (`input` + `datalist`). Catalogs use this; short closed lists stay `<select>`. |
 | **docked-filter-panel** | Left 30% slide-over filter for a paged Fit List (Filter / Reset). Lots, products, inventory. Slate canvas. |

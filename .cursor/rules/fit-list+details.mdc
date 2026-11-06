@@ -1,0 +1,77 @@
+---
+description: Fit List + details — selectable Fit List on the left, a details container for the selected row on the right. Apply when the user says fit-list+details or asks to reuse the customer orders / customers two-pane layout.
+alwaysApply: false
+---
+
+# Fit List + details
+
+Reference pages:
+
+- `/customer-orders`: `src/app/(app)/customer-orders/CustomerOrdersTable.tsx` (Fit List + `OrderDetailsPanel`) inside `CustomerOrdersWorkspace.tsx`.
+- `/customers`: `src/app/(app)/customers/CustomersTable.tsx` (Fit List + `CustomerDetailsPanel`) inside `CustomersWorkspace.tsx`.
+
+When the user says **fit-list+details**, reuse this instead of a new two-pane layout, an inline-expanding row, or a popup for the selected row. The list half is the **Fit List** (full rules below). The right half is a details container for the selected row.
+
+## Layout
+
+- Inside `FitPage`, under the page title. The title row carries **Filter** (and any sort control) on the right; the filter itself is a left docked panel (**docked-filter-panel**).
+- An optional **Add new …** button sits above the pair and opens a card.
+- One row, `flex min-h-0 flex-1 gap-3`: the Fit List on the left, the details container on the right, each **50% wide** (`w-1/2 min-w-0`), both with the Fit List box chrome (`rounded-lg border border-stone-300 bg-white p-3`).
+- Right-side docked panels opened from the details (products, addresses, and so on) keep **docked-panel-colors**.
+
+## Selection drives the details
+
+- One selected row feeds the details container. A `SelectionBridge` reads `useList().selectedId` and reports it to the parent.
+- Changing the selection closes any open edit card.
+- Nothing selected: the container reads **Select a …** centered (for example **Select an order.**).
+- A new row follows the Fit List add-batch rule below, so the details show it.
+
+## List rows
+
+- No buttons on a row. The row's main identifier may stay a link. Rows do not edit.
+- Row columns are the short identifying fields only. Everything else is in the details.
+
+## Details header
+
+- A fixed-height header with a bottom border. The name and number on the left (name in medium text, number in muted text), truncated if long.
+- On the right, on one line, aligned with each other: icon controls (**Open**, **Print**, and any status controls) with no box around them, then a thin divider, then **Edit** and **Delete** in the Fit List chip (`RowButtons`, `editing={false}`).
+- **Edit** opens the same card as **Add new**, filled with this row. **Save** and **Cancel** appear on that card only after a field changes.
+- **Delete** asks for confirmation. **Working…** floats to its left, another click is ignored until the write finishes, and an error shows as a `DismissNote` under the header.
+- **Open** (folder icon) opens a docked panel on the right. **Print** opens the print page in a new tab.
+
+## Details body
+
+- Scrolls inside the container, `space-y-2`.
+- Each group is a bordered stone-50 box (`overflow-hidden rounded-md border border-stone-300 bg-stone-50`). A titled group has a highlighted block header across its top: stone-200 bar, bottom border, semibold `text-xs`. An untitled first group has no bar.
+- Compact text: labels 11px muted, values 13px. Facts sit in 2 to 4 columns (`grid-cols-2`, `-3`, `-4`) with small gaps; long values wrap.
+- Address pairs (**Ship to**, **Bill to**) sit side by side, each a group. **Notes** is a group, last, and it grows to fill the free height above a pinned summary (`Section fill`), with a small minimum so a short panel scrolls instead.
+- A summary group (for example **Order summary**) can be pinned under the scrolling body (`shrink-0`) so it stays visible. Compute it from data the page already loaded, with one shared function, not a new query.
+- Fields shown in the list stay out of the details unless the details need them.
+
+## Fit List (full rules, kept whole)
+
+Shared UI in `src/components/list/ListTable.tsx` (`ListTable`, `SelectableRow`, `RowButtons`, `useList`, `useListRow`). Styles in `src/app/globals.css` (`.list-table`).
+
+### Format
+
+- One selected row at a time (click row to select; zebra + teal selected).
+- After rows are **inserted**: if **one** new row, select it; if **several**, select the **last one added**. Pagination reveals that row. First load of the list does not treat existing rows as added. If the parent knows insert order, pass `resumeId` of that last row so selection follows the add batch, not list sort.
+- Each data row is a **full border box** (not a shared underline). First cell indented.
+- Action buttons live in a **rounded bordered chip** in the **last column**. In fit-list+details the row has no chip. Edit and Delete move to the details header chip.
+- Merchandise **Edit** opens the product settings popup (row does not expand). Charges still edit inline.
+
+### Editing
+
+- Only **one row** in edit mode.
+- In edit: **Cancel** always; **Save** only if dirty; **Edit** when not editing. **Delete** optional.
+- **Save** and **Delete** follow **Working…**: the label stays, Working… floats to the left, and another click is ignored until the write finishes.
+- Click another row while **clean** → leave edit and select (or start edit if they clicked Edit).
+- Click away while **dirty** → modal **Save** or **Cancel** (discard), then navigate.
+- `tryLeave(fn)` for pagination or other navigation with the same prompt.
+
+### Variants
+
+- **Paged Fit List**: show as many full rows as fit; **Previous** / **Next**; optional outer **rounded bordered container**.
+- Catalog pages with an **Add** row (`FitPage`): the list stretches in the leftover space so the add fields stay on screen (no page scroll to find Add). Inventory has no add row and fills the viewport.
+
+Reuse this instead of inventing a new table/edit interaction.

@@ -12,6 +12,7 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.8",
     "geist": "^1.8.2",
+    "jspdf": "^4.2.1",
     "next": "15.5.4",
     "pagedjs": "^0.4.3",
     "react": "19.1.0",

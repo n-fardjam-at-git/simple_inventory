@@ -5,24 +5,40 @@ alwaysApply: false
 
 # Customer-order print
 
-Reference: `src/app/(app)/customer-orders/[id]/print/` (**Print** on the Order details container of `/customer-orders`). Data: `src/lib/customer-order-report.ts`. Page-count chrome: `src/components/print/PrintActions.tsx`. Staff only (admin, warehouse, sales rep).
+Reference: `src/app/(app)/customer-orders/[id]/print/` (**Print** on the Order details container of `/customer-orders`). Data: `src/lib/customer-order-report.ts`. Page chrome: `src/components/print/PrintActions.tsx` (`marginPageNumbers`). File name: `src/lib/file-name.ts`. Staff only (admin, warehouse, sales rep).
 
 When the user says **customer-order-print**, reuse this instead of a PDF export or a new report layout.
 
 ## Paper and chrome
 
-- US letter **portrait 8.5×11**, **0.5in** margins. New tab; Print / Close; auto-open the print dialog.
-- **Page 1:** company name centered, then **Order {n} · {customer} · {page} of {pages}**, then the header block.
-- **Later pages:** the same Order / customer head only (table `thead`). Product blocks flow and may split; `break-inside-avoid` on each matrix.
+- US letter **portrait 8.5×11**, **0.5in** margins (0.65in at the bottom for the page number). New tab with **Print**, **Save PDF**, and **Close**. The print dialog does not open by itself (`autoPrint={false}`), so the page can be read and **Save PDF** used first. Cutting-order and vendor-shipment prints keep their auto-open.
+- **Page 1:** company name centered, then **Date** (today, `MM/DD/YYYY`, this computer's date, right-aligned under the company name; `PrintDate`), then **Order {n} · {customer}**, then the **Order details** box. The date prints on page 1 only.
+- **Later pages:** the same Order / customer head only (table `thead`).
+- **Page numbers** print in the bottom-right margin as **Page {n} of {total}** (`@page` margin box with `counter(page)` and `counter(pages)`). The browser counts the pages. The repeated head carries no page number.
+- **Default file name** for Save as PDF is the page title, set on the server with `generateMetadata` (a title set only in the browser can be replaced by the root layout title): **Order No {n} - {safe customer name}**, for example `Order No 1 - Coast formal`. `safeFileName` removes `\ / : * ? " < > |` and control characters, collapses spaces, and caps the name at 60 characters.
 
-## Header block
+## Save PDF
 
-Label / value lines. **Order information:** customer, terms, shipping method, season (**Ship at once** or the season name), status, start date, cancel date. No account, Sage, or processing block (received via, rep, who entered or updated). Under it **Ship to** and **Bill to**, each with the customer name over the snapshot address lines. Notes last when present. Dates print as `MM/DD/YYYY`.
+A **Save PDF** button sits between **Print** and **Close** (`SavePdfButton`). It builds the report in the browser with `jspdf` (`src/lib/customer-order-pdf.ts`) and downloads `{file name}.pdf`, so the name is set whichever printer the user would pick. No database write, so no Working…. A failure shows a `DismissNote`. The PDF has the same groups, order, date, summary, and page numbers (**Page n of N**, bottom right) as the print page, and no group splits across pages. Change the print page and the PDF together.
+
+## Boxes
+
+Every group is the same box: a gray title bar (`print-lot-head`), then the body. **Order details**, each product, **Charges**, and **Order summary** each carry `print-box` and stay whole on one page. A group that does not fit moves to the next page. Do not split a group across pages.
+
+## Order details box
+
+Two columns. Left: customer, terms, shipping method, season (**Ship at once** or the season name). Right: status, start date, cancel date. Under a thin rule, **Ship to** and **Bill to** side by side, each with the customer name over the snapshot address lines. Notes last when present. No account, Sage, or processing block (received via, rep, who entered or updated). Dates print as `MM/DD/YYYY`.
 
 ## Body
 
-- One boxed block per **merchandise** line, sorted by product name. Bar: product name, line status in a thin font, line price on the right. Under it: article · model · item, then the lot's color, pattern, and content. **variable-size/drop-matrix** full width: all product sizes; only drops with qty. A cell with a size extra prints the extra under the qty in amber (`+5.00`). Row totals. Footer line: **Total {ordered} · Shipped {shipped} · Extended {usd}**. No sized cells: **Not sized**.
+- One box per **merchandise** line, sorted by product name. Bar: product name, line status in a thin font, line price on the right. Under it: article · model · item, then the lot's color, pattern, and content. **variable-size/drop-matrix** full width: all product sizes; only drops with qty. A cell with a size extra prints the extra under the qty in amber (`+5.00`). Row totals. Footer line: **Total {ordered} · Shipped {shipped} · Extended {usd}**. No sized cells: **Not sized**.
 - **Charges** box after the merchandise: one row per freight or surcharge line with type, status, qty (blank for freight), price, extended.
-- **Order summary** box: merchandise products, units, amount, surcharge quantity, surcharge, freight, shipped quantity, shipped value, **Grand total**. Canceled lines print with their status but are left out of every summary amount, the same as the products panel.
+- **Order summary** box, right-aligned table of quantity, name, amount. The totals come from `summarizeOrder` (`src/lib/order-summary.ts`), the same function the Order details container uses on `/customer-orders`. Change the math there only.
+  - One row per **item** (the item of each merchandise line's model, such as Suits or Pants): units and amount, for example `3 Suits $150`, `2 Pants $50`. A line with no item counts under **Other**, last.
+  - **Total quantity** with all units and the merchandise amount, for example `5 Total quantity $200`.
+  - **Surcharges** and **Freight**, amount only.
+  - **Grand total**.
+  - **Shipped** quantity and value, one muted row under the grand total.
+- Canceled lines print with their status but are left out of every summary amount, the same as the products panel.
 
 Shipped quantity and shipped value are 0 until a customer shipment writes `qty_shipped`. Do not switch this report to landscape unless asked.

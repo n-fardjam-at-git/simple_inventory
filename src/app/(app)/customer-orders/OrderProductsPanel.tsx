@@ -16,8 +16,10 @@ import { PriceInput } from "@/components/PriceInput";
 import { SysDollar, SysFreight, SysSurcharge } from "@/components/icons/SysImages";
 import { CuttingDropQtyGrid } from "../cutting-orders/CuttingDropQtyGrid";
 import { QtyCopyPopup, snapshotQtyCopy, type QtyCopy } from "../cutting-orders/QtyCopyPopup";
+import { ProductInventoryPopup } from "./ProductInventoryPopup";
 import { LINE_STATUS, orderStatusLabel } from "@/lib/customer-order";
 import { PRODUCT_TYPE } from "@/lib/product-type";
+import { summarizeOrder, type SummaryLine } from "@/lib/order-summary";
 import {
   addCustomerOrderCharge,
   addCustomerOrderProductId,
@@ -43,6 +45,8 @@ export type OrderProductLine = {
   size_chart_id: string | null;
   ordered: number;
   shipped: number;
+  /** Shipped quantity times (line price + size extra). 0 until a shipment writes `qty_shipped`. */
+  shipped_value: number;
   sizes: MatrixSize[];
   drops: MatrixDrop[];
   cells: Cell[];
@@ -57,7 +61,7 @@ const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" 
 const MONEY =
   "inline-flex w-20 shrink-0 items-center justify-end overflow-hidden border border-stone-200 bg-stone-50 px-0.5 py-0 text-xs font-semibold tabular-nums";
 
-function lineExtended(row: OrderProductLine) {
+export function lineExtended(row: OrderProductLine) {
   if (row.type !== PRODUCT_TYPE.merchandise) {
     const qty = row.type === PRODUCT_TYPE.freight ? 1 : Number(row.qty) || 0;
     return qty * (Number(row.price) || 0);
@@ -68,6 +72,20 @@ function lineExtended(row: OrderProductLine) {
     const up = Number(cell.upcharge) || 0;
     return sum + qty * (price + up);
   }, 0);
+}
+
+/** An order line in the shape `summarizeOrder` adds up. */
+export function summaryLine(row: OrderProductLine): SummaryLine {
+  const merchandise = row.type === PRODUCT_TYPE.merchandise;
+  return {
+    type: row.type,
+    status: row.status,
+    item: merchandise && row.item_id ? row.item_name : null,
+    ordered: merchandise ? row.ordered : row.type === PRODUCT_TYPE.freight ? 1 : Number(row.qty) || 0,
+    extended: lineExtended(row),
+    shipped: merchandise ? row.shipped : 0,
+    shipped_value: merchandise ? row.shipped_value : 0,
+  };
 }
 
 export function OrderProductsPanel({
@@ -94,6 +112,9 @@ export function OrderProductsPanel({
   const [pickItemId, setPickItemId] = useState<string | null>(null);
   const [copyProductId, setCopyProductId] = useState<string | null>(null);
   const [copies, setCopies] = useState<QtyCopy[]>([]);
+  /** Inventory window opened from the picker bar. Not tied to a row. */
+  const [pickedInv, setPickedInv] = useState<{ productId: string; label: string } | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const sessionOrderId = useRef("");
   const onOrder = new Set(lines.map((line) => line.product_id));
   const choices = catalog.filter((product) => !onOrder.has(product.id));
@@ -104,6 +125,7 @@ export function OrderProductsPanel({
   useEffect(() => {
     if (!open || !orderId) {
       setPickItemId(null);
+      setPickedInv(null);
       setCopyProductId(null);
       setCopies([]);
       sessionOrderId.current = "";
@@ -112,6 +134,7 @@ export function OrderProductsPanel({
     setPickItemId(null);
     if (sessionOrderId.current !== orderId) {
       sessionOrderId.current = orderId;
+      setPickedInv(null);
       setCopyProductId(null);
       setCopies([]);
     }
@@ -133,7 +156,7 @@ export function OrderProductsPanel({
       {open && orderId ? (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="mb-3 flex shrink-0 justify-center">
-            <div className="min-w-56 max-w-full rounded-lg border border-stone-300 bg-white">
+            <div ref={barRef} className="min-w-56 max-w-full rounded-lg border border-stone-300 bg-white">
               <div className="border-b border-stone-300 bg-stone-100 px-3 py-2 text-center text-sm font-medium text-stone-700">
                 Add a product
               </div>
@@ -158,10 +181,22 @@ export function OrderProductsPanel({
                     onClose={() => setPickItemId(null)}
                   />
                 ))}
+                <InventoryPickButton
+                  open={pickItemId === "inventory"}
+                  options={catalog}
+                  onToggle={() => setPickItemId((cur) => (cur === "inventory" ? null : "inventory"))}
+                  onClose={() => setPickItemId(null)}
+                  onShow={(choice) => {
+                    setPickedInv({ productId: choice.id, label: choice.label });
+                    setPickItemId(null);
+                  }}
+                />
               </div>
             </div>
           </div>
           <OrderProductTable
+            pickedInvProductId={pickedInv?.productId ?? null}
+            onPickedInvClose={() => setPickedInv(null)}
             rows={lines}
             copyId={copyLine ? `${copyLine.customer_order_id}:${copyLine.product_id}` : null}
             onCopy={(row) =>
@@ -169,6 +204,15 @@ export function OrderProductsPanel({
             }
           />
         </div>
+      ) : null}
+      {open && pickedInv ? (
+        <ProductInventoryPopup
+          key={pickedInv.productId}
+          productId={pickedInv.productId}
+          label={pickedInv.label}
+          anchor={barRef.current}
+          onClose={() => setPickedInv(null)}
+        />
       ) : null}
     </DockedPanel>
     <QtyCopyPopup
@@ -382,6 +426,109 @@ function ChargePickButton({
   );
 }
 
+/**
+ * Last button on the picker bar. Pick any active merchandise, then Show inventory opens the
+ * inventory window under the bar. Nothing is written, so there is no Working….
+ */
+function InventoryPickButton({
+  open,
+  options,
+  onToggle,
+  onClose,
+  onShow,
+}: {
+  open: boolean;
+  options: CatalogChoice[];
+  onToggle: () => void;
+  onClose: () => void;
+  onShow: (choice: CatalogChoice) => void;
+}) {
+  const [productId, setProductId] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setProductId("");
+      setErr(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      onClose();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, onClose]);
+
+  function show() {
+    if (reportInvalidCombo(popRef.current)) return;
+    const choice = options.find((product) => product.id === productId);
+    if (!choice) {
+      setErr("Pick a product.");
+      return;
+    }
+    onShow(choice);
+  }
+
+  return (
+    <div className="relative w-full not-first:border-l not-first:border-stone-300">
+      <button
+        type="button"
+        className={`w-full px-3 py-2 text-center text-sm leading-none ${
+          open ? "bg-stone-900 text-white" : "text-stone-800 hover:bg-stone-50"
+        }`}
+        onClick={onToggle}
+      >
+        Inventory
+      </button>
+      {open ? (
+        <div
+          ref={popRef}
+          className="absolute top-full right-0 z-20 mt-1 max-h-[70vh] w-72 overflow-auto rounded-lg border border-stone-200 bg-white p-3 shadow-lg"
+        >
+          <label className="mb-2 block text-sm">
+            <span className="mb-1 block text-stone-500">Product</span>
+            <ComboBox
+              required
+              className="w-full rounded border px-2 py-1"
+              placeholder="Product"
+              value={productId}
+              onChange={(id) => {
+                setProductId(id);
+                setErr(null);
+              }}
+              options={options.map((product) => ({ id: product.id, label: product.label }))}
+            />
+          </label>
+          {err ? (
+            <DismissNote className="mb-2 text-xs text-red-700" onDismiss={() => setErr(null)}>
+              {err}
+            </DismissNote>
+          ) : null}
+          <div className="flex gap-2">
+            <Btn type="button" onClick={show}>
+              Show inventory
+            </Btn>
+            <button
+              type="button"
+              className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-50"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ItemPickButton({
   item,
   open,
@@ -559,14 +706,40 @@ function ItemPickButton({
   );
 }
 
+/**
+ * Closes the picker-bar inventory window when a row of a different product is selected.
+ * The same product's row, or no row, leaves it open. Must sit inside the list.
+ */
+function PickedInventoryWatcher({
+  productId,
+  onClose,
+}: {
+  productId: string | null;
+  onClose: () => void;
+}) {
+  const { selectedId } = useList();
+  const last = useRef(selectedId);
+  useEffect(() => {
+    const changed = last.current !== selectedId;
+    last.current = selectedId;
+    if (!changed || !productId || !selectedId) return;
+    if (selectedId.split(":")[1] !== productId) onClose();
+  }, [selectedId, productId, onClose]);
+  return null;
+}
+
 function OrderProductTable({
   rows,
   copyId,
   onCopy,
+  pickedInvProductId,
+  onPickedInvClose,
 }: {
   rows: OrderProductLine[];
   copyId: string | null;
   onCopy: (row: OrderProductLine) => void;
+  pickedInvProductId: string | null;
+  onPickedInvClose: () => void;
 }) {
   const items = [...rows].sort((a, b) => {
     if (a.type !== b.type) return a.type - b.type;
@@ -580,13 +753,16 @@ function OrderProductTable({
         stretch
         tableClassName="inventory-boards table-fixed"
         thead={
-          <thead>
-            <tr className="text-stone-500">
-              <th className="w-[16%] py-1">Product</th>
-              <th className="py-1"></th>
-              <th className="w-48 py-1"></th>
-            </tr>
-          </thead>
+          <>
+            <thead>
+              <tr className="text-stone-500">
+                <th className="w-[16%] py-1">Product</th>
+                <th className="py-1"></th>
+                <th className="w-52 py-1"></th>
+              </tr>
+            </thead>
+            <PickedInventoryWatcher productId={pickedInvProductId} onClose={onPickedInvClose} />
+          </>
         }
         renderRow={(row) =>
           row.type === PRODUCT_TYPE.merchandise ? (
@@ -594,6 +770,8 @@ function OrderProductTable({
               row={row}
               copyOpen={copyId === `${row.customer_order_id}:${row.product_id}`}
               onCopy={() => onCopy(row)}
+              pickedInvOpen={pickedInvProductId != null}
+              onRowInventoryOpen={onPickedInvClose}
             />
           ) : (
             <ChargeLineRow row={row} />
@@ -606,17 +784,7 @@ function OrderProductTable({
 }
 
 function OrderExtendedTotals({ rows }: { rows: OrderProductLine[] }) {
-  let freight = 0;
-  let surcharge = 0;
-  let merchandise = 0;
-  for (const row of rows) {
-    if (row.status === "canceled") continue;
-    const amount = lineExtended(row);
-    if (row.type === PRODUCT_TYPE.freight) freight += amount;
-    else if (row.type === PRODUCT_TYPE.surcharge) surcharge += amount;
-    else merchandise += amount;
-  }
-  const total = freight + surcharge + merchandise;
+  const { freight, surcharge, merchandise, total } = summarizeOrder(rows.map(summaryLine));
   const parts = [
     ["Freight", freight],
     ["Surcharge", surcharge],
@@ -641,10 +809,15 @@ function ProductLineRow({
   row,
   copyOpen,
   onCopy,
+  pickedInvOpen,
+  onRowInventoryOpen,
 }: {
   row: OrderProductLine;
   copyOpen: boolean;
   onCopy: () => void;
+  /** The picker-bar inventory window is open. Only one window at a time. */
+  pickedInvOpen: boolean;
+  onRowInventoryOpen: () => void;
 }) {
   const [status, setStatus] = useState(row.status);
   const [matrixDirty, setMatrixDirty] = useState(false);
@@ -661,6 +834,36 @@ function ProductLineRow({
   const refreshRow = useRefreshRow(row);
   const id = `${row.customer_order_id}:${row.product_id}`;
   const dirty = status !== row.status || matrixDirty;
+  const [invOpen, setInvOpen] = useState(false);
+  const invBtn = useRef<HTMLButtonElement>(null);
+  const invArmed = useRef(false);
+
+  function toggleInventory() {
+    if (invOpen) {
+      setInvOpen(false);
+      return;
+    }
+    if (list.selectedId !== id) list.requestSelect(id);
+    onRowInventoryOpen();
+    setInvOpen(true);
+  }
+
+  useEffect(() => {
+    if (pickedInvOpen) setInvOpen(false);
+  }, [pickedInvOpen]);
+
+  // The popup belongs to this row. Selecting another row (or none) closes it.
+  useEffect(() => {
+    if (!invOpen) {
+      invArmed.current = false;
+      return;
+    }
+    if (list.selectedId === id) {
+      invArmed.current = true;
+      return;
+    }
+    if (invArmed.current) setInvOpen(false);
+  }, [invOpen, list.selectedId, id]);
 
   function persist() {
     return new Promise<boolean>((resolve) => {
@@ -717,7 +920,7 @@ function ProductLineRow({
   }, [row.status, editing]);
 
   return (
-    <SelectableRow id={id}>
+    <SelectableRow id={id} keepSelected={invOpen}>
       <td className="w-[16%] min-w-0 break-words pr-2">
         <div className="flex flex-wrap items-center gap-1 font-medium leading-tight">
           <span>{row.label}</span>
@@ -766,6 +969,16 @@ function ProductLineRow({
             onSaved={refreshRow}
           />
         ) : null}
+        {invOpen ? (
+          <ProductInventoryPopup
+            productId={row.product_id}
+            label={row.label}
+            sizes={row.sizes}
+            drops={row.drops}
+            anchor={invBtn.current?.closest("tr") ?? null}
+            onClose={() => setInvOpen(false)}
+          />
+        ) : null}
       </td>
       <td className="w-full min-w-0 pr-1">
         {editing ? (
@@ -811,7 +1024,7 @@ function ProductLineRow({
           </div>
         )}
       </td>
-      <td className="h-px w-48 pr-2 align-top">
+      <td className="h-px w-52 pr-2 align-top">
         <div className="flex h-full flex-col justify-between gap-1 pt-1">
           <div className="min-w-36">
           <RowButtons
@@ -820,15 +1033,27 @@ function ProductLineRow({
             saving={saving}
             deleting={pending}
             before={
-              <button
-                type="button"
-                className={`text-xs underline ${
-                  copyOpen ? "font-medium text-teal-800" : "text-stone-700"
-                }`}
-                onClick={onCopy}
-              >
-                Copy
-              </button>
+              <>
+                <button
+                  ref={invBtn}
+                  type="button"
+                  className={`text-xs underline ${
+                    invOpen ? "font-medium text-teal-800" : "text-stone-700"
+                  }`}
+                  onClick={toggleInventory}
+                >
+                  Inventory
+                </button>
+                <button
+                  type="button"
+                  className={`text-xs underline ${
+                    copyOpen ? "font-medium text-teal-800" : "text-stone-700"
+                  }`}
+                  onClick={onCopy}
+                >
+                  Copy
+                </button>
+              </>
             }
             onEdit={requestEdit}
             onSave={() => void persist()}
@@ -1036,7 +1261,7 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
           </div>
         </div>
       </td>
-      <td className="h-px w-48 pr-2 align-top">
+      <td className="h-px w-52 pr-2 align-top">
         <div className="flex h-full min-h-14 flex-col justify-between gap-1 pt-1">
           <div className="min-w-36 [&>div]:flex-nowrap">
             <RowButtons

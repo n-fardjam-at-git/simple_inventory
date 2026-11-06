@@ -188,6 +188,8 @@ export default async function CustomerOrdersPage() {
   }
   const cellsByLine = new Map<string, Cell[]>();
   const shippedByLine = new Map<string, number>();
+  /** Shipped quantity times the size extra, summed per line. The line price is added per shipped unit later. */
+  const shippedExtraByLine = new Map<string, number>();
   for (const cell of cellRows ?? []) {
     const key = `${cell.customer_order_id}:${cell.product_id}`;
     const list = cellsByLine.get(key) ?? [];
@@ -199,6 +201,11 @@ export default async function CustomerOrdersPage() {
     });
     cellsByLine.set(key, list);
     shippedByLine.set(key, (shippedByLine.get(key) ?? 0) + Number(cell.qty_shipped ?? 0));
+    shippedExtraByLine.set(
+      key,
+      (shippedExtraByLine.get(key) ?? 0) +
+        Number(cell.qty_shipped ?? 0) * (cell.price == null ? 0 : Number(cell.price)),
+    );
   }
   const lines: OrderProductLine[] = (lineRows ?? []).map((line) => {
     const product = one<{
@@ -245,6 +252,10 @@ export default async function CustomerOrdersPage() {
         0,
       ),
       shipped: shippedByLine.get(`${line.customer_order_id}:${line.product_id}`) ?? 0,
+      shipped_value:
+        (shippedByLine.get(`${line.customer_order_id}:${line.product_id}`) ?? 0) *
+          Number(line.price ?? 0) +
+        (shippedExtraByLine.get(`${line.customer_order_id}:${line.product_id}`) ?? 0),
       cells: cellsByLine.get(`${line.customer_order_id}:${line.product_id}`) ?? [],
     };
   });

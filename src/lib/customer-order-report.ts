@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isNoDropAxis, visibleDrops } from "@/lib/size-code";
 import { PRODUCT_TYPE } from "@/lib/product-type";
+import { summarizeOrder, type ItemTotal, type OrderTotals } from "@/lib/order-summary";
 
 function rel<T>(raw: unknown): T | null {
   return (Array.isArray(raw) ? raw[0] : raw) as T | null;
@@ -39,16 +40,12 @@ export type OrderReportLine = {
   shipped_value: number;
 };
 
-export type OrderReportSummary = {
+export type OrderReportItemTotal = ItemTotal;
+
+/** The shared totals (see `order-summary.ts`) plus two counts only the report prints. */
+export type OrderReportSummary = OrderTotals & {
   products: number;
-  units: number;
-  merchandise: number;
   charge_qty: number;
-  surcharge: number;
-  freight: number;
-  shipped_qty: number;
-  shipped_value: number;
-  total: number;
 };
 
 export type CustomerOrderReport = {
@@ -252,12 +249,7 @@ export async function loadCustomerOrderReport(
   const open = (line: OrderReportLine) => line.status !== "canceled";
   const openMerch = merchandise.filter(open);
   const openSurcharge = charges.filter((line) => open(line) && line.type === PRODUCT_TYPE.surcharge);
-  const openFreight = charges.filter((line) => open(line) && line.type === PRODUCT_TYPE.freight);
-  const sum = (list: OrderReportLine[], pick: (line: OrderReportLine) => number) =>
-    list.reduce((total, line) => total + pick(line), 0);
-  const merchandiseAmount = sum(openMerch, (line) => line.extended);
-  const surcharge = sum(openSurcharge, (line) => line.extended);
-  const freight = sum(openFreight, (line) => line.extended);
+  const totals = summarizeOrder(lines);
 
   const customer = rel<{
     account_no: number;
@@ -300,15 +292,9 @@ export async function loadCustomerOrderReport(
     merchandise,
     charges,
     summary: {
+      ...totals,
       products: openMerch.length,
-      units: sum(openMerch, (line) => line.ordered),
-      merchandise: merchandiseAmount,
-      charge_qty: sum(openSurcharge, (line) => line.ordered),
-      surcharge,
-      freight,
-      shipped_qty: sum(openMerch, (line) => line.shipped),
-      shipped_value: sum(openMerch, (line) => line.shipped_value),
-      total: merchandiseAmount + surcharge + freight,
+      charge_qty: openSurcharge.reduce((sum, line) => sum + line.ordered, 0),
     },
   };
 }

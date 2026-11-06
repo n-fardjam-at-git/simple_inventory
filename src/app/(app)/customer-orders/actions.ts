@@ -474,6 +474,62 @@ export async function loadOrderProductDraft(productId: string): Promise<OrderPro
   };
 }
 
+export type ProductInventory = {
+  sizes: { id: string; code: string; sort_order: number }[];
+  drops: { id: string; code: string; sort_order: number }[];
+  cells: { size_id: string; drop_id: string; qty: number }[];
+  /** Soonest arrival of an open, submitted cutting, `YYYY-MM-DD`. Null when none. */
+  arrives_next: string | null;
+};
+
+/** On-hand cells and the next cutting arrival for one product. Read only. */
+export async function loadProductInventory(productId: string): Promise<ProductInventory | string> {
+  if (!productId) return "Pick a product.";
+  const { supabase, userId } = await staffId();
+  if (!userId) return "Sign in again.";
+  const [
+    { data: rows, error },
+    { data: arrival, error: arrivalError },
+    { data: sizeRows },
+    { data: dropRows },
+  ] = await Promise.all([
+    supabase
+      .from("inventory")
+      .select("size_id, drop_id, qty_on_hand")
+      .eq("product_id", productId),
+    supabase.rpc("product_next_arrival", { p_product_id: productId }),
+    supabase
+      .from("product_sizes")
+      .select("size_chart_sizes ( id, code, sort_order )")
+      .eq("product_id", productId),
+    supabase
+      .from("product_drops")
+      .select("size_chart_drops ( id, code, sort_order )")
+      .eq("product_id", productId),
+  ]);
+  if (error) return error.message;
+  if (arrivalError) return arrivalError.message;
+  const dim = (raw: unknown) =>
+    (Array.isArray(raw) ? raw[0] : raw) as { id: string; code: string; sort_order: number } | null;
+  const keep = <T,>(row: T | null): row is T => Boolean(row);
+  return {
+    sizes: (sizeRows ?? [])
+      .map((row) => dim(row.size_chart_sizes))
+      .filter(keep)
+      .sort((a, b) => a.sort_order - b.sort_order),
+    drops: (dropRows ?? [])
+      .map((row) => dim(row.size_chart_drops))
+      .filter(keep)
+      .sort((a, b) => a.sort_order - b.sort_order),
+    cells: (rows ?? []).map((row) => ({
+      size_id: row.size_id,
+      drop_id: row.drop_id,
+      qty: Number(row.qty_on_hand ?? 0),
+    })),
+    arrives_next: arrival ? String(arrival).slice(0, 10) : null,
+  };
+}
+
 export async function addCustomerOrderProductId(
   orderId: string,
   productId: string,

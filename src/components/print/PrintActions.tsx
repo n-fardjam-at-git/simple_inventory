@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 
 function cssString(value: string) {
   return JSON.stringify(value);
@@ -123,12 +123,20 @@ export function PrintActions({
   orderLabel,
   vendorLabel,
   repeatPageHead = false,
+  marginPageNumbers = false,
+  autoPrint = true,
+  children,
 }: {
+  children?: ReactNode;
+  /** Open the print dialog as soon as the page loads. Off: the page waits for Print or Save PDF. */
+  autoPrint?: boolean;
   title: string;
   orderLabel: string;
   vendorLabel: string;
   /** Repeat the in-flow `.print-page-head` (table thead). No CSS margin-box header. */
   repeatPageHead?: boolean;
+  /** Print "Page X of Y" in the bottom margin. The browser counts the pages. */
+  marginPageNumbers?: boolean;
 }) {
   useEffect(() => {
     const prev = document.title;
@@ -139,7 +147,7 @@ export function PrintActions({
     style.setAttribute("data-print-page-head", "");
 
     function printOnce() {
-      if (cancelled || printed) return;
+      if (!autoPrint || cancelled || printed) return;
       printed = true;
       window.print();
     }
@@ -147,6 +155,23 @@ export function PrintActions({
     async function stampPages() {
       await document.fonts.ready;
       if (cancelled) return;
+
+      if (marginPageNumbers) {
+        style.textContent = `@media print {
+        @page {
+          size: 8.5in 11in;
+          margin: 0.5in 0.5in 0.65in;
+          @bottom-right {
+            content: "Page " counter(page) " of " counter(pages);
+            font-size: 9pt;
+            color: #1c1917;
+          }
+        }
+      }`;
+        document.head.appendChild(style);
+        printOnce();
+        return;
+      }
 
       const report = document.querySelector<HTMLElement>(".print-report");
       const total = report ? countPrintPages(report, repeatPageHead) : 1;
@@ -204,7 +229,7 @@ export function PrintActions({
       document.title = prev;
       style.remove();
     };
-  }, [title, orderLabel, vendorLabel, repeatPageHead]);
+  }, [title, orderLabel, vendorLabel, repeatPageHead, marginPageNumbers, autoPrint]);
 
   return (
     <div className="print:hidden mb-4 flex gap-2">
@@ -215,6 +240,7 @@ export function PrintActions({
       >
         Print
       </button>
+      {children}
       <button
         type="button"
         className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-50"

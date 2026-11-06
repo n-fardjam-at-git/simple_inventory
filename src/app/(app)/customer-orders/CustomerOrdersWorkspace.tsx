@@ -243,6 +243,7 @@ export function CustomerOrdersWorkspace({
           transmissionMethods={transmissionMethods}
           seasons={seasons}
           terms={terms}
+          lines={lines}
           onOpen={setOpenId}
           focusId={focusId}
           focusNonce={focusNonce}

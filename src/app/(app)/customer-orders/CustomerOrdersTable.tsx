@@ -6,12 +6,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DismissNote } from "@/components/DismissNote";
 import { FitList } from "@/components/list/FitList";
-import { SelectableRow, useList } from "@/components/list/ListTable";
+import { RowButtons, SelectableRow, useList } from "@/components/list/ListTable";
 import { WorkingBeside } from "@/components/WorkingBeside";
 import { Btn, Card } from "@/components/ui";
 import { SysApprove, SysApproved, SysFolder, SysFolderOpen, SysPrint, SysRevoke } from "@/components/icons/SysImages";
 import { customerPickLabel } from "@/lib/customer";
 import { orderStatusLabel } from "@/lib/customer-order";
+import { summarizeOrder } from "@/lib/order-summary";
+import { summaryLine, type OrderProductLine } from "./OrderProductsPanel";
 import { approveCustomerOrder, deleteCustomerOrder, revokeCustomerOrder, saveCustomerOrderHeader } from "./actions";
 import {
   OrderHeaderCard,
@@ -116,10 +118,12 @@ export function CustomerOrdersTable({
   transmissionMethods,
   seasons,
   terms,
+  lines,
   onOpen,
   focusId = null,
   focusNonce = 0,
 }: {
+  lines: OrderProductLine[];
   rows: CustomerOrderRow[];
   customers: OrderCustomer[];
   addresses: OrderAddress[];
@@ -170,6 +174,7 @@ export function CustomerOrdersTable({
       </div>
       <OrderDetailsPanel
         order={selected}
+        lines={selected ? lines.filter((line) => line.customer_order_id === selected.id) : []}
         deleting={deleting}
         deleteError={deleteErr}
         onDismissDeleteError={() => setDeleteErr(null)}
@@ -231,6 +236,7 @@ function SelectionBridge({ onSelect }: { onSelect: (id: string | null) => void }
 
 function OrderDetailsPanel({
   order,
+  lines,
   deleting,
   deleteError,
   onDismissDeleteError,
@@ -239,6 +245,7 @@ function OrderDetailsPanel({
   onDelete,
 }: {
   order: CustomerOrderRow | null;
+  lines: OrderProductLine[];
   deleting: boolean;
   deleteError: string | null;
   onDismissDeleteError: () => void;
@@ -363,21 +370,18 @@ function OrderDetailsPanel({
                   </span>
                 </>
               ) : null}
-              <button type="button" className="text-xs text-stone-700 underline" onClick={onEdit}>
-                Edit
-              </button>
-              <span className="relative">
-                <button
-                  type="button"
-                  className="text-xs text-red-700 underline"
-                  onClick={() => {
-                    if (!deleting) onDelete();
-                  }}
-                >
-                  Delete
-                </button>
-                {deleting ? <WorkingBeside side="left" /> : null}
-              </span>
+              <span className="mx-0.5 h-6 w-px shrink-0 bg-stone-300" aria-hidden />
+              <div className="[&>div]:flex-nowrap">
+                <RowButtons
+                  editing={false}
+                  dirty={false}
+                  deleting={deleting}
+                  onEdit={onEdit}
+                  onSave={() => {}}
+                  onCancel={() => {}}
+                  onDelete={onDelete}
+                />
+              </div>
             </div>
           </div>
           {deleteError ? (
@@ -390,33 +394,31 @@ function OrderDetailsPanel({
               {revokeErr}
             </DismissNote>
           ) : null}
-          <div className="min-h-0 flex-1 space-y-4 overflow-auto pt-3 text-sm">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pt-3 [&>*]:shrink-0">
+            <Section cols={2}>
               <Fact label="Season" value={order.future_season || "—"} />
               <Fact label="Cancel date" value={order.cancel_date || "—"} />
-            </dl>
-            <Section title="Customer">
+            </Section>
+            <Section title="Customer" cols={4}>
               <Fact label="Account" value={order.account_no == null ? "—" : String(order.account_no)} />
-              <Fact label="Sage" value={order.account} />
+              <Fact label="Sage" value={order.account || "—"} />
               <Fact label="Sales rep" value={order.sales_rep || "—"} />
               <Fact label="Entered by" value={order.created_by || "—"} />
             </Section>
-            <Section title="Terms and shipping">
+            <Section title="Terms and shipping" cols={3}>
               <Fact label="Terms" value={order.terms || "—"} />
               <Fact label="Received via" value={order.transmission_method || "—"} />
-              <Fact label="Shipping method" value={order.shipping_method || "—"} wide />
+              <Fact label="Shipping method" value={order.shipping_method || "—"} />
             </Section>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <Address title="Ship to" lines={order.ship_to} />
               <Address title="Bill to" lines={order.bill_to} />
             </div>
-            <section>
-              <h3 className="mb-1 text-[10px] font-semibold tracking-wide text-stone-400 uppercase">
-                Notes
-              </h3>
-              <p className="whitespace-pre-wrap text-stone-800">{order.notes || "—"}</p>
-            </section>
+            <Section title="Notes" fill>
+              <p className="whitespace-pre-wrap text-[13px] text-stone-900">{order.notes || "—"}</p>
+            </Section>
           </div>
+          <OrderSummaryGroup lines={lines} onOpen={onOpen} />
         </>
       ) : (
         <p className="m-auto text-sm text-stone-500">Select an order.</p>
@@ -465,41 +467,144 @@ function OrderDetailsPanel({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+const GROUP = "overflow-hidden rounded-md border border-stone-300 bg-stone-50";
+const GROUP_BODY = "px-3 py-2";
+
+/** Highlighted block header across the top of a group. */
+function GroupHeader({ children }: { children: ReactNode }) {
   return (
-    <section>
-      <h3 className="mb-1.5 text-[10px] font-semibold tracking-wide text-stone-400 uppercase">
-        {title}
-      </h3>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2">{children}</dl>
+    <h3 className="border-b border-stone-300 bg-stone-200 px-3 py-1 text-xs font-semibold text-stone-800">
+      {children}
+    </h3>
+  );
+}
+const FACT_COLS = {
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+} as const;
+
+/** One bordered group. With `cols` the children are Facts in a compact grid. */
+function Section({
+  title,
+  cols,
+  fill = false,
+  children,
+}: {
+  title?: string;
+  cols?: keyof typeof FACT_COLS;
+  /** Grow to take the free height under the other groups. */
+  fill?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className={fill ? `${GROUP} flex min-h-20 flex-1 flex-col !shrink` : GROUP}>
+      {title ? <GroupHeader>{title}</GroupHeader> : null}
+      <div className={fill ? `${GROUP_BODY} min-h-0 flex-1` : GROUP_BODY}>
+        {cols ? (
+          <dl className={`grid ${FACT_COLS[cols]} gap-x-3 gap-y-1.5`}>{children}</dl>
+        ) : (
+          children
+        )}
+      </div>
     </section>
   );
 }
 
-function Fact({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+
+/**
+ * Order summary, pinned under the scrolling details. The same rows as the report:
+ * one row per item, total quantity, surcharges, freight, grand total, shipped.
+ */
+function OrderSummaryGroup({ lines, onOpen }: { lines: OrderProductLine[]; onOpen: () => void }) {
+  const totals = summarizeOrder(lines.map(summaryLine));
+  const row = "border-b border-stone-200";
   return (
-    <div className={wide ? "col-span-2" : undefined}>
-      <dt className="text-xs text-stone-500">{label}</dt>
-      <dd className="text-stone-900">{value}</dd>
+    <section
+      className={`${GROUP} mt-2 shrink-0 cursor-pointer hover:border-stone-400`}
+      title="Open the order products"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+    >
+      <GroupHeader>Order summary</GroupHeader>
+      <div className={GROUP_BODY}>
+        <table className="w-full text-[13px] leading-tight">
+          <tbody>
+            {totals.items.map((item) => (
+              <tr key={item.item} className={row}>
+                <td className="w-10 py-0.5 text-right tabular-nums">{item.units}</td>
+                <td className="py-0.5 pl-2">{item.item}</td>
+                <td className="py-0.5 text-right tabular-nums">{usd.format(item.amount)}</td>
+              </tr>
+            ))}
+            <tr className={`${row} font-semibold`}>
+              <td className="w-10 py-0.5 text-right tabular-nums">{totals.units}</td>
+              <td className="py-0.5 pl-2">Total quantity</td>
+              <td className="py-0.5 text-right tabular-nums">{usd.format(totals.merchandise)}</td>
+            </tr>
+            <tr className={row}>
+              <td />
+              <td className="py-0.5 pl-2">Surcharges</td>
+              <td className="py-0.5 text-right tabular-nums">{usd.format(totals.surcharge)}</td>
+            </tr>
+            <tr className={row}>
+              <td />
+              <td className="py-0.5 pl-2">Freight</td>
+              <td className="py-0.5 text-right tabular-nums">{usd.format(totals.freight)}</td>
+            </tr>
+            <tr>
+              <td />
+              <th className="py-1 pl-2 text-left text-sm font-semibold">Grand total</th>
+              <td className="py-1 text-right text-sm font-semibold tabular-nums">
+                {usd.format(totals.total)}
+              </td>
+            </tr>
+            <tr className="border-t border-stone-300 text-stone-600">
+              <td className="w-10 pt-1 pb-0.5 text-right tabular-nums">{totals.shipped_qty}</td>
+              <td className="pt-1 pb-0.5 pl-2">Shipped</td>
+              <td className="pt-1 pb-0.5 text-right tabular-nums">
+                {usd.format(totals.shipped_value)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] leading-tight text-stone-500">{label}</dt>
+      <dd className="text-[13px] leading-tight break-words text-stone-900">{value}</dd>
     </div>
   );
 }
 
 function Address({ title, lines }: { title: string; lines: string[] }) {
   return (
-    <section className="rounded-md border border-stone-200 bg-stone-50 px-2.5 py-2">
-      <h3 className="mb-1 text-[10px] font-semibold tracking-wide text-stone-400 uppercase">
-        {title}
-      </h3>
-      {lines.length ? (
-        lines.map((line, i) => (
-          <p key={i} className="leading-tight text-stone-900">
-            {line}
-          </p>
-        ))
-      ) : (
-        <p className="text-stone-400">—</p>
-      )}
+    <section className={GROUP}>
+      <GroupHeader>{title}</GroupHeader>
+      <div className={GROUP_BODY}>
+        {lines.length ? (
+          lines.map((line, i) => (
+            <p key={i} className="text-[13px] leading-tight text-stone-900">
+              {line}
+            </p>
+          ))
+        ) : (
+          <p className="text-[13px] text-stone-400">—</p>
+        )}
+      </div>
     </section>
   );
 }

@@ -240,10 +240,13 @@ export function useListRow(
 export function SelectableRow({
   id,
   dimmed,
+  keepSelected = false,
   children,
 }: {
   id: string;
   dimmed?: boolean;
+  /** A click on this already selected row does not deselect it (a window is open for it). */
+  keepSelected?: boolean;
   children: ReactNode;
 }) {
   const { selectedId, editingId, requestSelect } = useList();
@@ -251,7 +254,7 @@ export function SelectableRow({
     const t = e.target as HTMLElement;
     if (t.closest("button, a, input, select, textarea, label, details, summary")) return;
     if (selectedId === id) {
-      if (editingId === id) return;
+      if (editingId === id || keepSelected) return;
       requestSelect(null);
       return;
     }

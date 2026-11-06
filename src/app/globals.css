@@ -191,7 +191,17 @@ body {
   margin-bottom: 0.25rem;
 }
 
+/* A boxed report group stays whole on one page. */
+.print-box {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
 @media print {
+  .print-sheet-whole > tbody > tr {
+    break-inside: avoid;
+  }
+
   .print-summary {
     break-before: page;
   }
