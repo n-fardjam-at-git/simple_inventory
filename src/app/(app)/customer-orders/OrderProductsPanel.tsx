@@ -112,7 +112,7 @@ export function OrderProductsPanel({
   const [pickItemId, setPickItemId] = useState<string | null>(null);
   const [copyProductId, setCopyProductId] = useState<string | null>(null);
   const [copies, setCopies] = useState<QtyCopy[]>([]);
-  /** Inventory window opened from the picker bar. Not tied to a row. */
+  /** Inventory window opened from the picker bar. Stays open across row selection. */
   const [pickedInv, setPickedInv] = useState<{ productId: string; label: string } | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const sessionOrderId = useRef("");
@@ -177,20 +177,16 @@ export function OrderProductsPanel({
                     options={choices.filter(
                       (product) => item.id === "any" || product.item_id === item.id,
                     )}
+                    inventoryOptions={catalog.filter(
+                      (product) => item.id === "any" || product.item_id === item.id,
+                    )}
                     onToggle={() => setPickItemId((cur) => (cur === item.id ? null : item.id))}
                     onClose={() => setPickItemId(null)}
+                    onShowInventory={(choice) => {
+                      setPickedInv({ productId: choice.id, label: choice.label });
+                    }}
                   />
                 ))}
-                <InventoryPickButton
-                  open={pickItemId === "inventory"}
-                  options={catalog}
-                  onToggle={() => setPickItemId((cur) => (cur === "inventory" ? null : "inventory"))}
-                  onClose={() => setPickItemId(null)}
-                  onShow={(choice) => {
-                    setPickedInv({ productId: choice.id, label: choice.label });
-                    setPickItemId(null);
-                  }}
-                />
               </div>
             </div>
           </div>
@@ -426,141 +422,45 @@ function ChargePickButton({
   );
 }
 
-/**
- * Last button on the picker bar. Pick any active merchandise, then Show inventory opens the
- * inventory window under the bar. Nothing is written, so there is no Working….
- */
-function InventoryPickButton({
-  open,
-  options,
-  onToggle,
-  onClose,
-  onShow,
-}: {
-  open: boolean;
-  options: CatalogChoice[];
-  onToggle: () => void;
-  onClose: () => void;
-  onShow: (choice: CatalogChoice) => void;
-}) {
-  const [productId, setProductId] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const popRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      setProductId("");
-      setErr(null);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      onClose();
-    }
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, onClose]);
-
-  function show() {
-    if (reportInvalidCombo(popRef.current)) return;
-    const choice = options.find((product) => product.id === productId);
-    if (!choice) {
-      setErr("Pick a product.");
-      return;
-    }
-    onShow(choice);
-  }
-
-  return (
-    <div className="relative w-full not-first:border-l not-first:border-stone-300">
-      <button
-        type="button"
-        className={`w-full px-3 py-2 text-center text-sm leading-none ${
-          open ? "bg-stone-900 text-white" : "text-stone-800 hover:bg-stone-50"
-        }`}
-        onClick={onToggle}
-      >
-        Inventory
-      </button>
-      {open ? (
-        <div
-          ref={popRef}
-          className="absolute top-full right-0 z-20 mt-1 max-h-[70vh] w-72 overflow-auto rounded-lg border border-stone-200 bg-white p-3 shadow-lg"
-        >
-          <label className="mb-2 block text-sm">
-            <span className="mb-1 block text-stone-500">Product</span>
-            <ComboBox
-              required
-              className="w-full rounded border px-2 py-1"
-              placeholder="Product"
-              value={productId}
-              onChange={(id) => {
-                setProductId(id);
-                setErr(null);
-              }}
-              options={options.map((product) => ({ id: product.id, label: product.label }))}
-            />
-          </label>
-          {err ? (
-            <DismissNote className="mb-2 text-xs text-red-700" onDismiss={() => setErr(null)}>
-              {err}
-            </DismissNote>
-          ) : null}
-          <div className="flex gap-2">
-            <Btn type="button" onClick={show}>
-              Show inventory
-            </Btn>
-            <button
-              type="button"
-              className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-50"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function ItemPickButton({
   item,
   open,
   orderId,
   options,
+  inventoryOptions,
   onToggle,
   onClose,
+  onShowInventory,
 }: {
   item: SetItem;
   open: boolean;
   orderId: string;
   options: CatalogChoice[];
+  inventoryOptions: CatalogChoice[];
   onToggle: () => void;
   onClose: () => void;
+  onShowInventory: (choice: CatalogChoice) => void;
 }) {
   const [productId, setProductId] = useState("");
+  const [inventory, setInventory] = useState(false);
   const [draft, setDraft] = useState<OrderProductDraft | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const popRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const list = inventory ? inventoryOptions : options;
 
   useEffect(() => {
     if (!open) {
       setProductId("");
+      setInventory(false);
       setDraft(null);
       setErr(null);
     }
   }, [open]);
 
   useEffect(() => {
-    if (!productId) {
+    if (!productId || inventory) {
       setDraft(null);
       return;
     }
@@ -577,7 +477,7 @@ function ItemPickButton({
     return () => {
       cancel = true;
     };
-  }, [productId]);
+  }, [productId, inventory]);
 
   useEffect(() => {
     if (!open) return;
@@ -604,7 +504,25 @@ function ItemPickButton({
     if (popRect.right > clipRect.right - pad) dx = clipRect.right - pad - popRect.right;
     if (popRect.left + dx < clipRect.left + pad) dx = clipRect.left + pad - popRect.left;
     pop.style.transform = dx ? `translateX(${Math.round(dx)}px)` : "";
-  }, [open, draft]);
+  }, [open, draft, inventory]);
+
+  function setInventoryMode(on: boolean) {
+    setInventory(on);
+    setErr(null);
+    if (!on && productId && !options.some((product) => product.id === productId)) {
+      setProductId("");
+    }
+  }
+
+  function showInventory() {
+    if (reportInvalidCombo(popRef.current)) return;
+    const choice = inventoryOptions.find((product) => product.id === productId);
+    if (!choice) {
+      setErr("Pick a product.");
+      return;
+    }
+    onShowInventory(choice);
+  }
 
   function add() {
     if (reportInvalidCombo(popRef.current)) return;
@@ -649,10 +567,29 @@ function ItemPickButton({
             draft ? "w-[40rem]" : "w-72"
           }`}
         >
+          <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+            <span>Inventory</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={inventory}
+              aria-label="Inventory"
+              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+                inventory ? "bg-[#34C759]" : "bg-stone-300"
+              }`}
+              onClick={() => setInventoryMode(!inventory)}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                  inventory ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
           <label className="mb-2 block text-sm">
             <span className="mb-1 block text-stone-500">Product</span>
             <ComboBox
-              key={item.id}
+              key={`${item.id}-${inventory ? "inv" : "add"}`}
               required
               className="w-full rounded border px-2 py-1"
               placeholder="Product"
@@ -661,10 +598,10 @@ function ItemPickButton({
                 setProductId(id);
                 setErr(null);
               }}
-              options={options.map((product) => ({ id: product.id, label: product.label }))}
+              options={list.map((product) => ({ id: product.id, label: product.label }))}
             />
           </label>
-          {draft ? (
+          {!inventory && draft ? (
             <form ref={formRef} className="mb-3 space-y-3" onSubmit={(e) => e.preventDefault()}>
               <label className="block text-sm">
                 <span className="mb-1 block text-stone-500">Price</span>
@@ -689,9 +626,15 @@ function ItemPickButton({
             </DismissNote>
           ) : null}
           <div className="flex gap-2">
-            <Btn type="button" busy={pending} onClick={add}>
-              Add
-            </Btn>
+            {inventory ? (
+              <Btn type="button" onClick={showInventory}>
+                Inventory
+              </Btn>
+            ) : (
+              <Btn type="button" busy={pending} onClick={add}>
+                Add
+              </Btn>
+            )}
             <button
               type="button"
               className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-50"
@@ -704,28 +647,6 @@ function ItemPickButton({
       ) : null}
     </div>
   );
-}
-
-/**
- * Closes the picker-bar inventory window when a row of a different product is selected.
- * The same product's row, or no row, leaves it open. Must sit inside the list.
- */
-function PickedInventoryWatcher({
-  productId,
-  onClose,
-}: {
-  productId: string | null;
-  onClose: () => void;
-}) {
-  const { selectedId } = useList();
-  const last = useRef(selectedId);
-  useEffect(() => {
-    const changed = last.current !== selectedId;
-    last.current = selectedId;
-    if (!changed || !productId || !selectedId) return;
-    if (selectedId.split(":")[1] !== productId) onClose();
-  }, [selectedId, productId, onClose]);
-  return null;
 }
 
 function OrderProductTable({
@@ -761,7 +682,6 @@ function OrderProductTable({
                 <th className="w-52 py-1"></th>
               </tr>
             </thead>
-            <PickedInventoryWatcher productId={pickedInvProductId} onClose={onPickedInvClose} />
           </>
         }
         renderRow={(row) =>

@@ -474,7 +474,15 @@ export async function loadOrderProductDraft(productId: string): Promise<OrderPro
   };
 }
 
+function lookupName(raw: unknown) {
+  const row = (Array.isArray(raw) ? raw[0] : raw) as { name?: string | null } | null;
+  const name = row?.name?.trim();
+  return name || null;
+}
+
 export type ProductInventory = {
+  /** Brand, color, pattern, and content, separated by middots. Empty when the lot has none. */
+  description: string;
   sizes: { id: string; code: string; sort_order: number }[];
   drops: { id: string; code: string; sort_order: number }[];
   cells: { size_id: string; drop_id: string; qty: number }[];
@@ -482,7 +490,7 @@ export type ProductInventory = {
   arrives_next: string | null;
 };
 
-/** On-hand cells and the next cutting arrival for one product. Read only. */
+/** On-hand cells, the fabric line, and the next cutting arrival for one product. Read only. */
 export async function loadProductInventory(productId: string): Promise<ProductInventory | string> {
   if (!productId) return "Pick a product.";
   const { supabase, userId } = await staffId();
@@ -492,6 +500,7 @@ export async function loadProductInventory(productId: string): Promise<ProductIn
     { data: arrival, error: arrivalError },
     { data: sizeRows },
     { data: dropRows },
+    { data: product, error: productError },
   ] = await Promise.all([
     supabase
       .from("inventory")
@@ -506,13 +515,30 @@ export async function loadProductInventory(productId: string): Promise<ProductIn
       .from("product_drops")
       .select("size_chart_drops ( id, code, sort_order )")
       .eq("product_id", productId),
+    supabase
+      .from("products")
+      .select(
+        "lots ( brands ( name ), colors ( name ), patterns ( name ), contents ( name ) )",
+      )
+      .eq("id", productId)
+      .maybeSingle(),
   ]);
   if (error) return error.message;
   if (arrivalError) return arrivalError.message;
+  if (productError) return productError.message;
   const dim = (raw: unknown) =>
     (Array.isArray(raw) ? raw[0] : raw) as { id: string; code: string; sort_order: number } | null;
   const keep = <T,>(row: T | null): row is T => Boolean(row);
+  const lot = (Array.isArray(product?.lots) ? product.lots[0] : product?.lots) as {
+    brands: unknown;
+    colors: unknown;
+    patterns: unknown;
+    contents: unknown;
+  } | null;
   return {
+    description: [lookupName(lot?.brands), lookupName(lot?.colors), lookupName(lot?.patterns), lookupName(lot?.contents)]
+      .filter(Boolean)
+      .join(" · "),
     sizes: (sizeRows ?? [])
       .map((row) => dim(row.size_chart_sizes))
       .filter(keep)
@@ -527,6 +553,40 @@ export async function loadProductInventory(productId: string): Promise<ProductIn
       qty: Number(row.qty_on_hand ?? 0),
     })),
     arrives_next: arrival ? String(arrival).slice(0, 10) : null,
+  };
+}
+
+export type NextCutting = {
+  order_num: number | null;
+  cells: { size_id: string; drop_id: string; qty: number }[];
+};
+
+/** Ordered size/drop qty on the coming cutting. Read only. Needs migration 0057. */
+export async function loadNextCutting(productId: string): Promise<NextCutting | string> {
+  if (!productId) return "Pick a product.";
+  const { supabase, userId } = await staffId();
+  if (!userId) return "Sign in again.";
+  const { data, error } = await supabase.rpc("product_next_cutting", { p_product_id: productId });
+  if (error) {
+    if (error.message.includes("product_next_cutting")) {
+      return "Run the new arrival SQL in the editor, then try again.";
+    }
+    return error.message;
+  }
+  if (!data) return "That cutting is no longer coming.";
+  const row = data as {
+    order_num?: number | null;
+    cells?: { size_id: string; drop_id: string; qty: number }[] | null;
+  };
+  return {
+    order_num: row.order_num ?? null,
+    cells: (row.cells ?? [])
+      .map((cell) => ({
+        size_id: cell.size_id,
+        drop_id: cell.drop_id,
+        qty: Number(cell.qty ?? 0),
+      }))
+      .filter((cell) => cell.qty > 0),
   };
 }
 

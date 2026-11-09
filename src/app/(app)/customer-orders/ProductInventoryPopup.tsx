@@ -4,8 +4,14 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 
 import { createPortal } from "react-dom";
 import { DismissNote } from "@/components/DismissNote";
 import type { MatrixDrop, MatrixSize } from "@/components/matrix/QtyMatrix";
+import { cuttingOrderLabel } from "@/lib/cutting-order";
 import { CuttingDropQtyGrid } from "../cutting-orders/CuttingDropQtyGrid";
-import { loadProductInventory, type ProductInventory } from "./actions";
+import {
+  loadNextCutting,
+  loadProductInventory,
+  type NextCutting,
+  type ProductInventory,
+} from "./actions";
 
 const WIDTH = 760;
 /** Space kept between the row and the window. */
@@ -19,6 +25,7 @@ function usDate(iso: string) {
 /**
  * Non-modal popup: what is on hand for one product, and when the next cutting arrives.
  * No overlay, so the panel behind stays usable. The row that opened it closes it.
+ * Arrives next, when it has a date, extends this window with that cutting's ordered qty.
  */
 export function ProductInventoryPopup({
   productId,
@@ -39,8 +46,20 @@ export function ProductInventoryPopup({
 }) {
   const [data, setData] = useState<ProductInventory | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [cutting, setCutting] = useState<NextCutting | null>(null);
+  const [cutErr, setCutErr] = useState<string | null>(null);
+  const [cutLoading, setCutLoading] = useState(false);
   const [pos, setPos] = useState<{ left: number; top: number; room?: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -107,7 +126,25 @@ export function ProductInventoryPopup({
     const top = useBelow ? rect.bottom + GAP : rect.top - GAP - height;
     const left = Math.max(8, Math.min(rect.left + 8, window.innerWidth - width - 8));
     setPos({ left, top: Math.max(8, top), room });
-  }, [anchor, data, err]);
+  }, [anchor, data, err, open, cutting, cutErr, cutLoading]);
+
+  function toggleArrival() {
+    if (!data?.arrives_next) return;
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (cutting || cutLoading) return;
+    setCutErr(null);
+    setCutLoading(true);
+    void loadNextCutting(productId).then((result) => {
+      if (!alive.current) return;
+      setCutLoading(false);
+      if (typeof result === "string") setCutErr(result);
+      else setCutting(result);
+    });
+  }
 
   if (typeof document === "undefined") return null;
 
@@ -159,12 +196,9 @@ export function ProductInventoryPopup({
         {!data && !err ? <p className="text-xs text-stone-500">Loading…</p> : null}
         {data ? (
           <>
-            <div className="flex items-baseline gap-2 text-xs">
-              <span className="font-medium text-stone-700">Arrives next</span>
-              <span className="tabular-nums text-stone-900">
-                {data.arrives_next ? usDate(data.arrives_next) : "—"}
-              </span>
-            </div>
+            {data.description ? (
+              <p className="text-xs font-light text-stone-500">{data.description}</p>
+            ) : null}
             <div>
               <div className="mb-1 flex items-baseline justify-between text-xs">
                 <span className="font-medium text-stone-700">On hand</span>
@@ -181,6 +215,60 @@ export function ProductInventoryPopup({
                 <p className="text-xs text-stone-500">None on hand.</p>
               )}
             </div>
+            {data.arrives_next ? (
+              <button
+                type="button"
+                aria-expanded={open}
+                className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded border px-2 py-1.5 text-left text-xs ${
+                  open
+                    ? "border-stone-400 bg-stone-100"
+                    : "border-stone-300 bg-white hover:bg-stone-50"
+                }`}
+                onClick={toggleArrival}
+              >
+                <span className="font-medium text-stone-700">Arrives next</span>
+                <span className="flex items-center gap-2 tabular-nums text-stone-900">
+                  {usDate(data.arrives_next)}
+                  <span aria-hidden className="text-stone-400">
+                    {open ? "▴" : "▾"}
+                  </span>
+                </span>
+              </button>
+            ) : (
+              <div className="flex items-baseline gap-2 text-xs">
+                <span className="font-medium text-stone-700">Arrives next</span>
+                <span className="text-stone-900">—</span>
+              </div>
+            )}
+            {open ? (
+              <div>
+                {cutErr ? (
+                  <DismissNote className="text-xs text-red-700" onDismiss={() => setCutErr(null)}>
+                    {cutErr}
+                  </DismissNote>
+                ) : null}
+                {cutLoading && !cutting ? (
+                  <p className="text-xs text-stone-500">Loading…</p>
+                ) : null}
+                {cutting ? (
+                  <>
+                    <div className="mb-1 text-xs font-medium text-stone-700">
+                      {cuttingOrderLabel(cutting.order_num)}
+                    </div>
+                    {cutting.cells.length ? (
+                      <CuttingDropQtyGrid
+                        qtyOnly
+                        sizes={sizes ?? data.sizes}
+                        drops={drops ?? data.drops}
+                        cells={cutting.cells}
+                      />
+                    ) : (
+                      <p className="text-xs text-stone-500">None on this cutting.</p>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
           </>
         ) : null}
       </div>
