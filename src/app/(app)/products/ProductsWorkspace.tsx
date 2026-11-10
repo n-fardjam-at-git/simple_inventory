@@ -91,7 +91,7 @@ export function ProductsWorkspace({
   collections: Opt[];
   brands: Opt[];
   items: Opt[];
-  models: Opt[];
+  models: (Opt & { item_id: string | null })[];
   colors: Opt[];
   patterns: Opt[];
   contents: Opt[];
@@ -121,6 +121,19 @@ export function ProductsWorkspace({
     }
     return out;
   }, [rows]);
+  const lotOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const lot = row.lots?.lot_no?.trim();
+      if (lot) seen.add(lot);
+    }
+    return [...seen]
+      .sort((a, b) => a.localeCompare(b, "en", { numeric: true, sensitivity: "base" }))
+      .map((lot) => ({ id: lot, label: lot }));
+  }, [rows]);
+  const modelOptions = (
+    draft.itemId ? models.filter((model) => model.item_id === draft.itemId) : models
+  ).map((model) => ({ id: model.id, label: model.name }));
 
   function reset() {
     setDraft(EMPTY);
@@ -214,10 +227,14 @@ export function ProductsWorkspace({
           <label className="min-w-0 flex-1">
             <span className="mb-1 block text-stone-500">Lot #</span>
             <FilterClear onClear={() => setDraft((d) => ({ ...d, lotNo: "" }))}>
-              <input
+              <ComboBox
+                allowEmpty
+                allowAny
+                placeholder="Lot #"
                 className={field}
                 value={draft.lotNo}
-                onChange={(e) => setDraft((d) => ({ ...d, lotNo: e.target.value }))}
+                onChange={(id) => setDraft((d) => ({ ...d, lotNo: id }))}
+                options={lotOptions}
               />
             </FilterClear>
           </label>
@@ -228,7 +245,13 @@ export function ProductsWorkspace({
                 allowEmpty
                 className={field}
                 value={draft.itemId}
-                onChange={(id) => setDraft((d) => ({ ...d, itemId: id }))}
+                onChange={(id) =>
+                  setDraft((d) => {
+                    const model = models.find((item) => item.id === d.modelId);
+                    const modelId = id && model && model.item_id !== id ? "" : d.modelId;
+                    return { ...d, itemId: id, modelId };
+                  })
+                }
                 options={items.map((i) => ({ id: i.id, label: i.name }))}
               />
             </FilterClear>
@@ -241,7 +264,7 @@ export function ProductsWorkspace({
                 className={field}
                 value={draft.modelId}
                 onChange={(id) => setDraft((d) => ({ ...d, modelId: id }))}
-                options={models.map((m) => ({ id: m.id, label: m.name }))}
+                options={modelOptions}
               />
             </FilterClear>
           </label>

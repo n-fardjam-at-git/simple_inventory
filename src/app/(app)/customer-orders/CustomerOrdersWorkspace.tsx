@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { FitPage } from "@/components/list/FitList";
-import { PageTitle } from "@/components/ui";
+import { Btn, PageTitle } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
 import { NumericInput } from "@/components/NumericInput";
 import { DockedFilterPanel, filterToggleClass } from "@/components/filter/DockedFilterPanel";
 import { FilterClear } from "@/components/filter/FilterClear";
 import { customerPickLabel } from "@/lib/customer";
+import { SHIP_AT_ONCE } from "@/lib/customer-order";
+import { PRODUCT_TYPE } from "@/lib/product-type";
 import type { SeasonRow } from "@/lib/season";
 import { CustomerOrdersTable, type CustomerOrderRow } from "./CustomerOrdersTable";
 import { NewOrderForm } from "./NewOrderForm";
@@ -41,20 +43,37 @@ type PaymentTerm = { term: string; days_due: number | null };
 type Filters = {
   orderNo: string;
   customerId: string;
+  season: string;
   openness: string;
   startFrom: string;
   startTo: string;
   leftToShip: string;
+  productIds: string[];
 };
 
 const EMPTY: Filters = {
   orderNo: "",
   customerId: "",
+  season: "",
   openness: "",
   startFrom: "",
   startTo: "",
   leftToShip: "",
+  productIds: [],
 };
+
+function filtersActive(filters: Filters) {
+  return Boolean(
+    filters.orderNo.trim() ||
+      filters.customerId ||
+      filters.season ||
+      filters.openness ||
+      filters.startFrom ||
+      filters.startTo ||
+      filters.leftToShip.trim() ||
+      filters.productIds.length,
+  );
+}
 
 const OPEN_STATUS = new Set(["pending", "approved", "picking", "back_order", "short_shipped"]);
 
@@ -76,16 +95,26 @@ function sortRows(rows: CustomerOrderRow[], sort: string) {
   return rows;
 }
 
-function applyFilters(rows: CustomerOrderRow[], filters: Filters) {
+function applyFilters(rows: CustomerOrderRow[], filters: Filters, lines: OrderProductLine[]) {
   const orderNo = filters.orderNo.trim().toLocaleLowerCase("en");
+  const wanted = new Set(filters.productIds);
+  const ordersWithProduct = wanted.size
+    ? new Set(
+        lines
+          .filter((line) => wanted.has(line.product_id))
+          .map((line) => line.customer_order_id),
+      )
+    : null;
   return rows.filter((row) => {
     if (orderNo && !String(row.order_no).toLocaleLowerCase("en").includes(orderNo)) return false;
     if (filters.customerId && row.customer_id !== filters.customerId) return false;
+    if (filters.season && row.future_season !== filters.season) return false;
     if (filters.openness === "open" && !OPEN_STATUS.has(row.status)) return false;
     if (filters.openness === "complete" && row.status !== "complete") return false;
     if (filters.startFrom && (!row.start_date || row.start_date < filters.startFrom)) return false;
     if (filters.startTo && (!row.start_date || row.start_date > filters.startTo)) return false;
     if (filters.leftToShip.trim() && row.left_to_ship !== Number(filters.leftToShip)) return false;
+    if (ordersWithProduct && !ordersWithProduct.has(row.id)) return false;
     return true;
   });
 }
@@ -123,11 +152,12 @@ export function CustomerOrdersWorkspace({
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
   const [sort, setSort] = useState<string>(SORT.orderNo);
+  const [productPick, setProductPick] = useState("");
   const filtered = useMemo(
-    () => sortRows(applyFilters(rows, applied), sort),
-    [rows, applied, sort],
+    () => sortRows(applyFilters(rows, applied, lines), sort),
+    [rows, applied, lines, sort],
   );
-  const isFiltered = Object.values(applied).some((value) => value.trim());
+  const isFiltered = filtersActive(applied);
   const orderNoEntered = Boolean(draft.orderNo.trim());
   const order = rows.find((row) => row.id === openId) ?? null;
   const customerOptions = useMemo(() => {
@@ -152,9 +182,37 @@ export function CustomerOrdersWorkspace({
     return options.sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
   }, [customers, rows]);
 
+  /** Ship at once, then each season. Orders store the season name. */
+  const seasonOptions = useMemo(() => {
+    const names = new Set<string>([SHIP_AT_ONCE]);
+    for (const season of seasons) names.add(season.season);
+    for (const row of rows) if (row.future_season) names.add(row.future_season);
+    return [...names].map((name) => ({ id: name, label: name }));
+  }, [seasons, rows]);
+
+  /** Active merchandise, plus a product that is on an order and no longer active. */
+  const productOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const product of catalog) byId.set(product.id, product.label);
+    for (const line of lines) {
+      if (line.type !== PRODUCT_TYPE.merchandise || byId.has(line.product_id)) continue;
+      byId.set(line.product_id, line.label);
+    }
+    return [...byId.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
+  }, [catalog, lines]);
+
+  function addProduct() {
+    if (!productPick || draft.productIds.includes(productPick)) return;
+    setDraft((current) => ({ ...current, productIds: [...current.productIds, productPick] }));
+    setProductPick("");
+  }
+
   function reset() {
     setDraft(EMPTY);
     setApplied(EMPTY);
+    setProductPick("");
     setComboKey((key) => key + 1);
   }
 
@@ -295,6 +353,19 @@ export function CustomerOrdersWorkspace({
           </FilterClear>
         </label>
         <label className="block">
+          <span className="mb-1 block text-stone-500">Season</span>
+          <FilterClear onClear={() => setDraft((current) => ({ ...current, season: "" }))}>
+            <ComboBox
+              allowEmpty
+              placeholder="Season"
+              className={field}
+              value={draft.season}
+              onChange={(id) => setDraft((current) => ({ ...current, season: id }))}
+              options={seasonOptions}
+            />
+          </FilterClear>
+        </label>
+        <label className="block">
           <span className="mb-1 block text-stone-500">Open or complete</span>
           <FilterClear onClear={() => setDraft((current) => ({ ...current, openness: "" }))}>
             <ComboBox
@@ -345,6 +416,52 @@ export function CustomerOrdersWorkspace({
             />
           </FilterClear>
         </label>
+        <div>
+          <span className="mb-1 block text-stone-500">Products</span>
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <ComboBox
+                allowEmpty
+                placeholder="Product"
+                className={field}
+                value={productPick}
+                onChange={setProductPick}
+                options={productOptions.filter((product) => !draft.productIds.includes(product.id))}
+              />
+            </div>
+            <Btn type="button" onClick={addProduct}>
+              Add
+            </Btn>
+          </div>
+          {draft.productIds.length ? (
+            <ul className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white">
+              {draft.productIds.map((id) => {
+                const label = productOptions.find((product) => product.id === id)?.label ?? "Product";
+                return (
+                  <li
+                    key={id}
+                    className="flex items-center justify-between gap-2 border-b border-slate-200 px-2 py-1 text-sm last:border-b-0"
+                  >
+                    <span className="min-w-0 truncate">{label}</span>
+                    <button
+                      type="button"
+                      className="shrink-0 px-1 text-base leading-none text-stone-500 hover:text-stone-800"
+                      aria-label={`Remove ${label}`}
+                      onClick={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          productIds: current.productIds.filter((productId) => productId !== id),
+                        }))
+                      }
+                    >
+                      ×
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
       </DockedFilterPanel>
     </>
   );

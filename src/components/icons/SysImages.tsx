@@ -480,3 +480,123 @@ export function SysRevoke({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function SysCart({ className }: { className?: string }) {
+  const uid = useId().replace(/:/g, "");
+  const amber = `${uid}-cart`;
+  return (
+    <svg
+      className={`block h-11 w-[134px] shrink-0 drop-shadow-[0_1px_2px_rgba(217,119,6,0.28)] ${className ?? ""}`}
+      viewBox="0 0 170 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <rect x="4" y="4" width="162" height="48" rx="24" fill={`url(#${amber})`} />
+      <rect
+        x="4.5"
+        y="4.5"
+        width="161"
+        height="47"
+        rx="23.5"
+        stroke="#FDE68A"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+      />
+      <path
+        d="M28 5H142C154.703 5 165 15.2975 165 28C165 17 154.703 8 142 8H28C15.2975 8 5 17 5 28C5 15.2975 15.2975 5 28 5Z"
+        fill="#FFFFFF"
+        fillOpacity="0.25"
+      />
+      <text
+        x="28"
+        y="33"
+        fill="#FFFFFF"
+        fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif"
+        fontWeight="600"
+        fontSize="16"
+        letterSpacing="-0.2"
+      >
+        Cart
+      </text>
+      <circle cx="138" cy="28" r="14" fill="#FFFFFF" fillOpacity="0.25" />
+      <circle cx="138" cy="28" r="13.5" stroke="#FFFFFF" strokeOpacity="0.4" strokeWidth="1" />
+      <path
+        d="M129.5 22.5H132L134 30.5H142.5L144.5 24.5H133"
+        stroke="#FFFFFF"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <circle cx="135" cy="33.5" r="1.25" fill="#FFFFFF" />
+      <circle cx="141.5" cy="33.5" r="1.25" fill="#FFFFFF" />
+      <defs>
+        <linearGradient id={amber} x1="4" y1="4" x2="166" y2="52" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#F59E0B" />
+          <stop offset="1" stopColor="#D97706" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+export function SysAddToCart({ className }: { className?: string }) {
+  const uid = useId().replace(/:/g, "");
+  const amber = `${uid}-add-to-cart`;
+  return (
+    <svg
+      className={`block h-11 w-[134px] shrink-0 drop-shadow-[0_1px_2px_rgba(217,119,6,0.28)] ${className ?? ""}`}
+      viewBox="0 0 170 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <rect x="4" y="4" width="162" height="48" rx="24" fill={`url(#${amber})`} />
+      <rect
+        x="4.5"
+        y="4.5"
+        width="161"
+        height="47"
+        rx="23.5"
+        stroke="#FDE68A"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+      />
+      <path
+        d="M28 5H142C154.703 5 165 15.2975 165 28C165 17 154.703 8 142 8H28C15.2975 8 5 17 5 28C5 15.2975 15.2975 5 28 5Z"
+        fill="#FFFFFF"
+        fillOpacity="0.25"
+      />
+      <text
+        x="24"
+        y="33"
+        fill="#FFFFFF"
+        fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif"
+        fontWeight="600"
+        fontSize="15"
+        letterSpacing="-0.2"
+      >
+        Add to Cart
+      </text>
+      <circle cx="138" cy="28" r="14" fill="#FFFFFF" fillOpacity="0.25" />
+      <circle cx="138" cy="28" r="13.5" stroke="#FFFFFF" strokeOpacity="0.4" strokeWidth="1" />
+      <path
+        d="M129.5 22.5H132L134 30.5H142.5L144.5 24.5H133"
+        stroke="#FFFFFF"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <circle cx="135" cy="33.5" r="1.25" fill="#FFFFFF" />
+      <circle cx="141.5" cy="33.5" r="1.25" fill="#FFFFFF" />
+      <defs>
+        <linearGradient id={amber} x1="4" y1="4" x2="166" y2="52" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#F59E0B" />
+          <stop offset="1" stopColor="#D97706" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}

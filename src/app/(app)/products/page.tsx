@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
+import { productImageUrl } from "@/lib/product-images";
 import { asSeasonRows } from "@/lib/season";
 import { ProductsWorkspace } from "./ProductsWorkspace";
 
@@ -9,6 +11,7 @@ export default async function ProductsPage({
   searchParams: Promise<{ edit?: string }>;
 }) {
   const profile = await requireUser();
+  if (profile.role === "customer") redirect("/shop");
   const supabase = await createClient();
   const { data } = await supabase
     .from("products")
@@ -26,10 +29,27 @@ export default async function ProductsPage({
     .order("name");
   const { data: brands } = await supabase.from("brands").select("id, name").order("name");
   const { data: items } = await supabase.from("items").select("id, name").order("name");
-  const { data: models } = await supabase.from("models").select("id, name").order("name");
+  const { data: models } = await supabase.from("models").select("id, name, item_id").order("name");
   const { data: colors } = await supabase.from("colors").select("id, name").order("name");
   const { data: patterns } = await supabase.from("patterns").select("id, name").order("name");
   const { data: contents } = await supabase.from("contents").select("id, name").order("name");
+
+  const ids = (data ?? []).map((p) => p.id);
+  const { data: imageRows } = ids.length
+    ? await supabase
+        .from("product_images")
+        .select("product_id, src_path, thumb_path, sort_order")
+        .in("product_id", ids)
+        .order("sort_order")
+    : { data: [] };
+  const imagesByProduct = new Map<string, { src: string; thumb: string }[]>();
+  for (const row of imageRows ?? []) {
+    const src = productImageUrl(row.src_path);
+    if (!src) continue;
+    const list = imagesByProduct.get(row.product_id) ?? [];
+    list.push({ src, thumb: productImageUrl(row.thumb_path) || src });
+    imagesByProduct.set(row.product_id, list);
+  }
 
   const rows = (data ?? []).map((p) => ({
     id: p.id,
@@ -72,6 +92,7 @@ export default async function ProductsPage({
         items: (itemsRel as { name: string } | null) ?? null,
       };
     })(),
+    images: imagesByProduct.get(p.id) ?? [],
   }));
 
   const { data: templateRows } = await supabase

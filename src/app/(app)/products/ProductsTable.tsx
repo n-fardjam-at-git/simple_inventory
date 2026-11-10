@@ -11,6 +11,7 @@ import { deleteProduct, updateProductRow } from "@/app/(app)/products/actions";
 import { toSentenceCase } from "@/lib/text-case";
 import { NumericInput } from "@/components/NumericInput";
 import type { ProductTemplateOption } from "./SaveAsTemplatePopup";
+import { ProductThumb, type ProductPhoto } from "@/components/ProductThumb";
 import { ProductEditPopup } from "./ProductEditPopup";
 
 export type Row = {
@@ -41,6 +42,7 @@ export type Row = {
     item_id?: string | null;
     items: { name: string } | null;
   } | null;
+  images?: ProductPhoto[];
 };
 
 export function ProductsTable({
@@ -180,18 +182,23 @@ function MerchRow({
   return (
     <SelectableRow id={row.id} dimmed={!row.is_active}>
       <td className="py-1.5">
-        <div className="font-medium">
-          {title}
-          {brandItem ? (
-            <span className="ml-1.5 text-xs font-light text-stone-500">{brandItem}</span>
-          ) : null}
+        <div className="flex items-start gap-2">
+          <ProductThumb title={title} images={row.images ?? []} reserve />
+          <div className="min-w-0">
+            <div className="font-medium">
+              {title}
+              {brandItem ? (
+                <span className="ml-1.5 text-xs font-light text-stone-500">{brandItem}</span>
+              ) : null}
+            </div>
+            <p className="text-xs font-light leading-tight text-stone-500">
+              {fabric ? `${fabric}. ` : ""}
+              {row.is_active ? "Active" : "Inactive"}
+              {row.availability ? ` · ${row.availability}` : null}
+            </p>
+            {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
+          </div>
         </div>
-        <p className="text-xs font-light leading-tight text-stone-500">
-          {fabric ? `${fabric}. ` : ""}
-          {row.is_active ? "Active" : "Inactive"}
-          {row.availability ? ` · ${row.availability}` : null}
-        </p>
-        {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
       </td>
       <td className="whitespace-nowrap text-xs">
         {isSpecialPriceStage(row.price_stage) ? (

@@ -256,7 +256,7 @@ export function QtyMatrix({
       </table>
       {showTotals ? (
         grandTotalExtra ? (
-          <div className="flex w-14 shrink-0 flex-col items-center justify-end gap-1">
+          <div className="flex w-16 shrink-0 flex-col items-center justify-end gap-1">
             {grandTotalExtra}
             <span
               className={`inline-flex w-full items-center justify-center border border-stone-200 bg-stone-50 font-semibold tabular-nums ${pad} ${compact ? "text-xs" : "text-sm"}`}
