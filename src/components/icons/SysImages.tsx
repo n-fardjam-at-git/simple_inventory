@@ -481,33 +481,37 @@ export function SysRevoke({ className }: { className?: string }) {
   );
 }
 
-export function SysCart({ className }: { className?: string }) {
+export function SysCart({ className, bare = false }: { className?: string; bare?: boolean }) {
   const uid = useId().replace(/:/g, "");
   const amber = `${uid}-cart`;
   return (
     <svg
-      className={`block h-11 w-[134px] shrink-0 drop-shadow-[0_1px_2px_rgba(217,119,6,0.28)] ${className ?? ""}`}
+      className={`block h-11 w-[134px] shrink-0 ${bare ? "" : "drop-shadow-[0_1px_2px_rgba(217,119,6,0.28)]"} ${className ?? ""}`}
       viewBox="0 0 170 56"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden
     >
-      <rect x="4" y="4" width="162" height="48" rx="24" fill={`url(#${amber})`} />
-      <rect
-        x="4.5"
-        y="4.5"
-        width="161"
-        height="47"
-        rx="23.5"
-        stroke="#FDE68A"
-        strokeOpacity="0.6"
-        strokeWidth="1"
-      />
-      <path
-        d="M28 5H142C154.703 5 165 15.2975 165 28C165 17 154.703 8 142 8H28C15.2975 8 5 17 5 28C5 15.2975 15.2975 5 28 5Z"
-        fill="#FFFFFF"
-        fillOpacity="0.25"
-      />
+      {bare ? null : (
+        <>
+          <rect x="4" y="4" width="162" height="48" rx="24" fill={`url(#${amber})`} />
+          <rect
+            x="4.5"
+            y="4.5"
+            width="161"
+            height="47"
+            rx="23.5"
+            stroke="#FDE68A"
+            strokeOpacity="0.6"
+            strokeWidth="1"
+          />
+          <path
+            d="M28 5H142C154.703 5 165 15.2975 165 28C165 17 154.703 8 142 8H28C15.2975 8 5 17 5 28C5 15.2975 15.2975 5 28 5Z"
+            fill="#FFFFFF"
+            fillOpacity="0.25"
+          />
+        </>
+      )}
       <text
         x="28"
         y="33"

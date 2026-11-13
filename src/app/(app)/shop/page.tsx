@@ -5,6 +5,13 @@ import { productImageUrl } from "@/lib/product-images";
 import type { ProductPhoto } from "@/components/ProductThumb";
 import { ShopWorkspace, type DraftOrder, type ShopProduct } from "./ShopWorkspace";
 
+type Named = { name: string };
+
+function one<T>(value: T | T[] | null | undefined): T | null {
+  if (value == null) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
 export default async function ShopPage() {
   await requireRoles(["customer"]);
   const supabase = await createClient();
@@ -33,7 +40,9 @@ export default async function ShopPage() {
 
   const { data: products } = await supabase
     .from("products")
-    .select("id, name, standard_price, lots ( colors ( name ) )")
+    .select(
+      "id, name, standard_price, availability, lots ( brands ( name ), colors ( name ), patterns ( name ), contents ( name ) ), models ( items ( name ) )",
+    )
     .eq("type", 1)
     .eq("is_active", true)
     .eq("published", true)
@@ -55,15 +64,24 @@ export default async function ShopPage() {
     imagesByProduct.set(row.product_id, list);
   }
   const catalog: ShopProduct[] = (products ?? []).map((product) => {
-    const lot = (Array.isArray(product.lots) ? product.lots[0] : product.lots) as {
-      colors: { name: string } | { name: string }[] | null;
+    const lot = one(product.lots) as {
+      brands: Named | Named[] | null;
+      colors: Named | Named[] | null;
+      patterns: Named | Named[] | null;
+      contents: Named | Named[] | null;
     } | null;
-    const colorRaw = Array.isArray(lot?.colors) ? lot?.colors[0] : lot?.colors;
+    const model = one(product.models) as { items: Named | Named[] | null } | null;
+    const nameOf = (value: Named | Named[] | null | undefined) => one(value)?.name?.trim() || null;
     return {
       id: product.id,
       name: product.name?.trim() || "Product",
       price: Number(product.standard_price ?? 0),
-      color: colorRaw?.name?.trim() || null,
+      brand: nameOf(lot?.brands),
+      item: nameOf(model?.items),
+      pattern: nameOf(lot?.patterns),
+      color: nameOf(lot?.colors),
+      content: nameOf(lot?.contents),
+      availability: product.availability?.trim() || null,
       images: imagesByProduct.get(product.id) ?? [],
     };
   });
