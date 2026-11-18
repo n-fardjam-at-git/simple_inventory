@@ -154,14 +154,16 @@ function DraftDetails({
               </button>
               {canAct && submitted ? (
                 <>
-                  <button
-                    type="button"
-                    className="rounded border border-stone-300 px-2 py-1 text-xs hover:bg-stone-100 disabled:opacity-40"
-                    disabled={busy}
-                    onClick={() => setAsk("accept")}
-                  >
-                    Accept
-                  </button>
+                  {order.customer_acceptance === true ? (
+                    <button
+                      type="button"
+                      className="rounded border border-stone-300 px-2 py-1 text-xs hover:bg-stone-100 disabled:opacity-40"
+                      disabled={busy}
+                      onClick={() => setAsk("accept")}
+                    >
+                      Accept
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="rounded border border-stone-300 px-2 py-1 text-xs hover:bg-stone-100 disabled:opacity-40"
@@ -198,6 +200,15 @@ function DraftDetails({
               <Address title="Ship to" lines={order.ship} />
               <Address title="Bill to" lines={order.bill} />
             </div>
+            <Section title="Prices and terms">
+              <p className="text-[13px] text-stone-900">
+                {order.customer_acceptance === true
+                  ? "Accepted prices and terms"
+                  : order.customer_acceptance === false
+                    ? "Waiting for review"
+                    : "—"}
+              </p>
+            </Section>
             <StaffReply order={order} />
             <Section title="Notes" fill>
               <p className="whitespace-pre-wrap text-[13px] text-stone-900">{order.notes || "—"}</p>

@@ -28,7 +28,7 @@ export default async function DraftOrdersPage() {
   const { data: requests } = await supabase
     .from("customer_order_requests")
     .select(
-      "id, request_no, customer_id, status, created_at, future_season, start_date, cancel_date, terms, shipping_method, transmission_method, notes, staff_reply, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country, customers ( company_name, account_no, account_number, sales_rep_id )",
+      "id, request_no, customer_id, status, created_at, future_season, start_date, cancel_date, terms, shipping_method, transmission_method, notes, staff_reply, customer_acceptance, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country, customers ( company_name, account_no, account_number, sales_rep_id )",
     )
     .order("request_no", { ascending: false });
 
@@ -141,6 +141,7 @@ export default async function DraftOrdersPage() {
       transmission_method: row.transmission_method,
       notes: row.notes,
       staff_reply: row.staff_reply,
+      customer_acceptance: row.customer_acceptance,
       status: row.status,
       ship: addressLines(fields, "ship"),
       bill: addressLines(fields, "bill"),

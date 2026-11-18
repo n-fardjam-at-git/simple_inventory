@@ -17,6 +17,7 @@ export type DraftOrderRow = {
   transmission_method: string | null;
   notes: string | null;
   staff_reply: string | null;
+  customer_acceptance: boolean | null;
   status: string;
   ship: string[];
   bill: string[];

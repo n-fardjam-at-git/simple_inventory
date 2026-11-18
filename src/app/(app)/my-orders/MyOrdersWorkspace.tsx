@@ -22,6 +22,12 @@ function statusLabel(status: string) {
   return "Draft";
 }
 
+function acceptanceLabel(value: boolean | null) {
+  if (value === true) return "Accepted prices and terms";
+  if (value === false) return "Waiting for review";
+  return "—";
+}
+
 function addressLabel(address: RequestAddress) {
   const place = [address.city, address.address_line1].filter(Boolean).join(", ");
   return [address.location_name, place].filter(Boolean).join(" • ") || "Address";
@@ -113,6 +119,8 @@ function OrderDetails({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [askSend, setAskSend] = useState(false);
+  const [acceptance, setAcceptance] = useState(true);
   const [sending, setSending] = useState(false);
   const [deleting, startDelete] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -120,17 +128,22 @@ function OrderDetails({
 
   useEffect(() => {
     setEditing(false);
+    setAskSend(false);
+    setAcceptance(true);
     setErr(null);
   }, [order?.id]);
 
-  function send() {
+  function confirmSend() {
     if (!order || sending) return;
     setSending(true);
     void (async () => {
       try {
-        const message = await submitRequest(order.id);
+        const message = await submitRequest(order.id, acceptance);
         if (message) setErr(message);
-        else router.refresh();
+        else {
+          setAskSend(false);
+          router.refresh();
+        }
       } finally {
         setSending(false);
       }
@@ -157,11 +170,17 @@ function OrderDetails({
                 {panelOpen ? <SysFolderOpen className="!h-full !w-auto" /> : <SysFolder className="!h-full !w-auto" />}
               </button>
               {draft ? (
-                <span className="relative">
-                  <Btn type="button" busy={sending} onClick={send}>
-                    Send
-                  </Btn>
-                </span>
+                <Btn
+                  type="button"
+                  onClick={() => {
+                    if (askSend || sending) return;
+                    setAcceptance(true);
+                    setErr(null);
+                    setAskSend(true);
+                  }}
+                >
+                  Send
+                </Btn>
               ) : null}
               {draft ? (
                 <RowButtons
@@ -186,7 +205,7 @@ function OrderDetails({
               ) : null}
             </div>
           </div>
-          {err ? (
+          {err && !askSend ? (
             <DismissNote className="mt-3 text-xs text-red-700" onDismiss={() => setErr(null)}>
               {err}
             </DismissNote>
@@ -201,6 +220,9 @@ function OrderDetails({
               <Address title="Ship to" lines={order.ship} />
               <Address title="Bill to" lines={order.bill} />
             </div>
+            <Section title="Prices and terms">
+              <p className="text-[13px]">{acceptanceLabel(order.customer_acceptance)}</p>
+            </Section>
             <Section title="Staff reply">
               <p className="whitespace-pre-wrap text-[13px]">{order.staff_reply || "—"}</p>
             </Section>
@@ -214,6 +236,22 @@ function OrderDetails({
               seasons={seasons}
               addresses={addresses}
               onClose={() => setEditing(false)}
+            />
+          ) : null}
+          {askSend ? (
+            <SendCard
+              requestNo={order.request_no}
+              acceptance={acceptance}
+              sending={sending}
+              err={err}
+              onAcceptance={setAcceptance}
+              onDismiss={() => setErr(null)}
+              onCancel={() => {
+                if (sending) return;
+                setAskSend(false);
+                setErr(null);
+              }}
+              onSend={confirmSend}
             />
           ) : null}
         </>
@@ -230,6 +268,81 @@ function Bridge({ onSelect }: { onSelect: (id: string | null) => void }) {
     onSelect(selectedId);
   }, [onSelect, selectedId]);
   return null;
+}
+
+function SendCard({
+  requestNo,
+  acceptance,
+  sending,
+  err,
+  onAcceptance,
+  onDismiss,
+  onCancel,
+  onSend,
+}: {
+  requestNo: number;
+  acceptance: boolean;
+  sending: boolean;
+  err: string | null;
+  onAcceptance: (value: boolean) => void;
+  onDismiss: () => void;
+  onCancel: () => void;
+  onSend: () => void;
+}) {
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-transparent p-4">
+      <button type="button" className="absolute inset-0" aria-label="Close" onClick={onCancel} />
+      <div className="relative z-10 w-[min(32rem,calc(100vw-2rem))] rounded-lg border border-stone-200 bg-white p-4 shadow-lg">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium">Send order {requestNo}</h2>
+          <button type="button" className="text-lg leading-none text-stone-500" aria-label="Close" onClick={onCancel}>
+            ×
+          </button>
+        </div>
+        <div className="mb-4 space-y-2 text-sm">
+          <label className="flex items-start gap-2">
+            <input
+              type="radio"
+              className="mt-1"
+              name="customer-acceptance"
+              checked={acceptance}
+              onChange={() => onAcceptance(true)}
+            />
+            <span>Accept all prices and terms (the order can be processed and shipped)</span>
+          </label>
+          <label className="flex items-start gap-2">
+            <input
+              type="radio"
+              className="mt-1"
+              name="customer-acceptance"
+              checked={!acceptance}
+              onChange={() => onAcceptance(false)}
+            />
+            <span>Wait for order review (the order will not be processed)</span>
+          </label>
+        </div>
+        {err ? (
+          <DismissNote className="mb-3 text-xs text-red-700" onDismiss={onDismiss}>
+            {err}
+          </DismissNote>
+        ) : null}
+        <div className="flex gap-2">
+          <Btn type="button" busy={sending} onClick={onSend}>
+            Send
+          </Btn>
+          <button
+            type="button"
+            className="rounded border border-stone-300 px-3 py-1.5 text-sm"
+            disabled={sending}
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 function EditCard({

@@ -10,6 +10,7 @@ export type RequestOrder = {
   cancel_date: string | null;
   notes: string | null;
   staff_reply: string | null;
+  customer_acceptance: boolean | null;
   ship: string[];
   bill: string[];
 };

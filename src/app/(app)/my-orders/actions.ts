@@ -291,12 +291,12 @@ export async function saveRequestHeader(requestId: string, formData: FormData) {
   revalidatePath("/my-orders");
 }
 
-export async function submitRequest(requestId: string) {
+export async function submitRequest(requestId: string, customerAcceptance: boolean) {
   const { supabase, customerId } = await customerContext();
   if (!customerId) return "Your login is not linked to a customer.";
   const { error } = await supabase
     .from("customer_order_requests")
-    .update({ status: "submitted" })
+    .update({ status: "submitted", customer_acceptance: customerAcceptance })
     .eq("id", requestId)
     .eq("customer_id", customerId)
     .eq("status", "draft");
