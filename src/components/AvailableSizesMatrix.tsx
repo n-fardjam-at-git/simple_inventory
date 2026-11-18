@@ -27,17 +27,17 @@ export function AvailableSizesMatrix({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="border-collapse text-xs">
+    <div className="w-full overflow-x-auto">
+      <table className="w-max border-collapse text-xs">
         <thead>
           <tr>
             {hideDrop ? null : (
-              <th className={`border border-stone-200 bg-stone-100 ${pad} text-left font-medium`}>Drop</th>
+              <th className={`w-16 border border-stone-200 bg-stone-100 ${pad} text-left font-medium`}>Drop</th>
             )}
             {sortedSizes.map((size) => (
               <th
                 key={size.id}
-                className={`border border-stone-200 bg-stone-100 px-1.5 py-0.5 text-center font-medium`}
+                className="w-12 max-w-12 border border-stone-200 bg-stone-100 px-0.5 py-0.5 text-center font-medium"
               >
                 {size.code}
               </th>
@@ -54,20 +54,24 @@ export function AvailableSizesMatrix({
                 const key = `${size.id}:${drop.id}`;
                 const available = on.has(key);
                 const amount = extra.get(key) ?? 0;
+                const price = amount > 0 ? `+${usd.format(amount)}` : null;
                 return (
-                  <td
-                    key={size.id}
-                    className={`border border-stone-200 ${available && amount > 0 ? "bg-green-100" : "bg-white"} ${pad} text-center`}
-                  >
-                    {amount > 0 ? (
-                      <span className="text-[0.85em] font-medium text-red-700 tabular-nums">
-                        +{usd.format(amount)}
-                      </span>
-                    ) : (
+                  <td key={size.id} className={`w-12 max-w-12 border border-stone-200 bg-white ${pad} text-center`}>
+                    {available ? (
                       <span
-                        className={`inline-block h-4 w-4 rounded-sm ${available ? "bg-green-600" : ""}`}
-                        aria-label={available ? "Available" : undefined}
-                      />
+                        className="inline-flex h-8 w-full items-center justify-center rounded-sm bg-green-600"
+                        aria-label={price ? `Available, ${price}` : "Available"}
+                      >
+                        {price ? (
+                          <span className="text-[0.85em] font-medium text-red-700 tabular-nums [text-shadow:0_0_2px_white]">
+                            {price}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : price ? (
+                      <span className="text-[0.85em] font-medium text-red-700 tabular-nums">{price}</span>
+                    ) : (
+                      <span className="inline-block h-8 w-full" />
                     )}
                   </td>
                 );

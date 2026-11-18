@@ -64,7 +64,7 @@ export default async function MyOrdersPage({
     supabase
       .from("customer_order_requests")
       .select(
-        "id, request_no, status, created_at, future_season, start_date, cancel_date, notes, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country",
+        "id, request_no, status, created_at, future_season, start_date, cancel_date, notes, staff_reply, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country",
       )
       .eq("customer_id", customerId)
       .order("request_no", { ascending: false }),
@@ -135,6 +135,7 @@ export default async function MyOrdersPage({
     start_date: row.start_date,
     cancel_date: row.cancel_date,
     notes: row.notes,
+    staff_reply: row.staff_reply,
     ship: addressLines(row, "ship"),
     bill: addressLines(row, "bill"),
   }));

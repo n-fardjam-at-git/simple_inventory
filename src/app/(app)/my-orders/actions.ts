@@ -51,12 +51,20 @@ async function merchandise(supabase: Awaited<ReturnType<typeof createClient>>, i
   );
 }
 
+export type CartLineInput = {
+  productId: string;
+  cells: { size_id: string; drop_id: string; qty: number }[];
+};
+
 async function addProducts(
   supabase: Awaited<ReturnType<typeof createClient>>,
   requestId: string,
-  productIds: string[],
+  lines: CartLineInput[],
 ) {
-  const products = await merchandise(supabase, productIds);
+  const products = await merchandise(
+    supabase,
+    lines.map((line) => line.productId),
+  );
   if (!products.length) return "Pick a product from the shop.";
   const { data: existing } = await supabase
     .from("customer_order_request_products")
@@ -72,7 +80,49 @@ async function addProducts(
       price: Number(product.standard_price ?? 0),
     })),
   );
-  return error?.message ?? null;
+  if (error) return error.message;
+
+  const freshIds = fresh.map((product) => product.id);
+  const [{ data: sizeRows }, { data: dropRows }, { data: ups }] = await Promise.all([
+    supabase.from("product_sizes").select("product_id, size_id").in("product_id", freshIds),
+    supabase.from("product_drops").select("product_id, drop_id").in("product_id", freshIds),
+    supabase
+      .from("product_price_upcharges")
+      .select("product_id, size_id, drop_id, upcharge_amount")
+      .in("product_id", freshIds),
+  ]);
+  const sizes = new Set((sizeRows ?? []).map((row) => `${row.product_id}:${row.size_id}`));
+  const drops = new Set((dropRows ?? []).map((row) => `${row.product_id}:${row.drop_id}`));
+  const upcharge = new Map(
+    (ups ?? []).map((row) => [
+      `${row.product_id}:${row.size_id}:${row.drop_id}`,
+      Number(row.upcharge_amount ?? 0),
+    ]),
+  );
+  const byProduct = new Map(lines.map((line) => [line.productId, line.cells]));
+  const cellRows = fresh.flatMap((product) =>
+    (byProduct.get(product.id) ?? []).flatMap((cell) => {
+      const qty = Math.round(Number(cell.qty) || 0);
+      if (qty <= 0) return [];
+      if (!sizes.has(`${product.id}:${cell.size_id}`) || !drops.has(`${product.id}:${cell.drop_id}`)) {
+        return [];
+      }
+      const extra = upcharge.get(`${product.id}:${cell.size_id}:${cell.drop_id}`) || 0;
+      return [
+        {
+          request_id: requestId,
+          product_id: product.id,
+          size_id: cell.size_id,
+          drop_id: cell.drop_id,
+          qty,
+          price: extra > 0 ? extra : null,
+        },
+      ];
+    }),
+  );
+  if (!cellRows.length) return null;
+  const { error: cellError } = await supabase.from("customer_order_request_cells").insert(cellRows);
+  return cellError?.message ?? null;
 }
 
 function addressFields(
@@ -96,13 +146,37 @@ function addressFields(
   };
 }
 
+export type RequestHeaderInput = {
+  future_season: string | null;
+  start_date: string | null;
+  cancel_date: string | null;
+  notes: string | null;
+  ship_address_id: string | null;
+  bill_address_id: string | null;
+};
+
 /** Creates a draft from the cart and returns its id, or an error message. */
-export async function createRequestFromCart(productIds: string[]): Promise<string> {
+export async function createRequestFromCart(
+  lines: CartLineInput[],
+  header: RequestHeaderInput,
+): Promise<string> {
   const { supabase, customerId, userId } = await customerContext();
   if (!userId) return "Sign in again.";
   if (!customerId) return "Your login is not linked to a customer.";
-  const products = await merchandise(supabase, productIds);
+  const products = await merchandise(
+    supabase,
+    lines.map((line) => line.productId),
+  );
   if (!products.length) return "Pick a product from the shop.";
+  const futureSeason = header.future_season?.trim() || null;
+  if (futureSeason && futureSeason !== SHIP_AT_ONCE) {
+    const { data: season } = await supabase
+      .from("seasons")
+      .select("season")
+      .eq("season", futureSeason)
+      .maybeSingle();
+    if (!season) return "Pick a season.";
+  }
   const { data: customer } = await supabase
     .from("customers")
     .select("id, sales_rep_id")
@@ -111,41 +185,51 @@ export async function createRequestFromCart(productIds: string[]): Promise<strin
   if (!customer) return "Your login is not linked to a customer.";
   const { data: addresses } = await supabase
     .from("customer_addresses")
-    .select("address_type, address_line1, address_line2, city, region, postal_code, country")
+    .select("id, address_type, address_line1, address_line2, city, region, postal_code, country")
     .eq("customer_id", customerId);
-  const ship =
-    (addresses ?? []).find((row) => row.address_type === "shipping" || row.address_type === "both") ??
-    null;
-  const bill =
-    (addresses ?? []).find((row) => row.address_type === "billing" || row.address_type === "both") ??
-    null;
-  const { data: created, error } = await supabase
+  const ship = header.ship_address_id
+    ? (addresses ?? []).find((row) => row.id === header.ship_address_id)
+    : null;
+  const bill = header.bill_address_id
+    ? (addresses ?? []).find((row) => row.id === header.bill_address_id)
+    : null;
+  if (header.ship_address_id && (!ship || (ship.address_type !== "shipping" && ship.address_type !== "both"))) {
+    return "Ship-to must be a shipping address.";
+  }
+  if (header.bill_address_id && (!bill || (bill.address_type !== "billing" && bill.address_type !== "both"))) {
+    return "Bill-to must be a billing address.";
+  }
+  const { error } = await supabase.from("customer_order_requests").insert({
+    customer_id: customerId,
+    status: "draft",
+    future_season: futureSeason,
+    start_date: header.start_date?.trim() || null,
+    cancel_date: header.cancel_date?.trim() || null,
+    notes: header.notes?.trim() || null,
+    sales_rep_id: customer.sales_rep_id,
+    created_by: userId,
+    ...addressFields("ship", ship ?? null),
+    ...addressFields("bill", bill ?? null),
+  });
+  if (error) return error.message;
+  // A returning insert is checked by the read policy before the row exists, so read it after.
+  const { data: created, error: readError } = await supabase
     .from("customer_order_requests")
-    .insert({
-      customer_id: customerId,
-      status: "draft",
-      future_season: SHIP_AT_ONCE,
-      start_date: new Date().toISOString().slice(0, 10),
-      sales_rep_id: customer.sales_rep_id,
-      created_by: userId,
-      ...addressFields("ship", ship),
-      ...addressFields("bill", bill),
-    })
     .select("id")
-    .single();
-  if (error || !created) return error?.message ?? "Could not start the order.";
-  const message = await addProducts(
-    supabase,
-    created.id,
-    products.map((product) => product.id),
-  );
+    .eq("customer_id", customerId)
+    .eq("status", "draft")
+    .order("request_no", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (readError || !created) return readError?.message ?? "Could not start the order.";
+  const message = await addProducts(supabase, created.id, lines);
   if (message) return message;
   revalidatePath("/my-orders");
   return created.id;
 }
 
 /** Adds cart products onto a draft. Returns the request id, or an error message. */
-export async function addCartToRequest(requestId: string, productIds: string[]): Promise<string> {
+export async function addCartToRequest(requestId: string, lines: CartLineInput[]): Promise<string> {
   const { supabase, customerId, userId } = await customerContext();
   if (!userId) return "Sign in again.";
   if (!customerId) return "Your login is not linked to a customer.";
@@ -157,7 +241,7 @@ export async function addCartToRequest(requestId: string, productIds: string[]):
   if (!request || request.customer_id !== customerId || request.status !== "draft") {
     return "That order is not an open draft.";
   }
-  const message = await addProducts(supabase, requestId, productIds);
+  const message = await addProducts(supabase, requestId, lines);
   if (message) return message;
   revalidatePath("/my-orders");
   return requestId;

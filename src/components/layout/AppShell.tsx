@@ -13,6 +13,7 @@ const LINKS: { href: string; label: string; roles: Role[] }[] = [
   { href: "/vendor-cuttings", label: "Cutting orders", roles: ["vendor"] },
   { href: "/vendor-advices", label: "Vendor packing lists", roles: ["admin", "warehouse", "vendor"] },
   { href: "/users", label: "Users", roles: ["admin"] },
+  { href: "/draft-orders", label: "Draft orders", roles: ["admin", "warehouse", "sales_rep"] },
   { href: "/customer-orders", label: "Customer orders", roles: ["admin", "warehouse", "sales_rep"] },
   { href: "/customer-shipments", label: "Customer shipments", roles: ["admin", "warehouse", "sales_rep"] },
   { href: "/customers", label: "Customers", roles: ["admin", "warehouse", "sales_rep"] },
@@ -35,12 +36,14 @@ export function AppShell({
   displayName,
   role,
   submittedPackingLists = 0,
+  submittedOrderRequests = 0,
   children,
 }: {
   tradeName: string;
   displayName: string;
   role: Role;
   submittedPackingLists?: number;
+  submittedOrderRequests?: number;
   children: React.ReactNode;
 }) {
   const links = LINKS.filter((l) => l.roles.includes(role));
@@ -72,6 +75,11 @@ export function AppShell({
               {l.href === "/vendor-advices" && submittedPackingLists > 0 ? (
                 <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-stone-900 px-1.5 text-xs font-medium text-white tabular-nums">
                   {submittedPackingLists}
+                </span>
+              ) : null}
+              {l.href === "/draft-orders" && submittedOrderRequests > 0 ? (
+                <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-stone-900 px-1.5 text-xs font-medium text-white tabular-nums">
+                  {submittedOrderRequests}
                 </span>
               ) : null}
             </Link>

@@ -34,12 +34,28 @@ function today() {
   return `${mm}/${dd}/${now.getFullYear()}`;
 }
 
+export type CustomerOrderPdfOptions = {
+  /** When false, the Order details box is left out. */
+  details?: boolean;
+  /** When false, the page head is Preview and the customer, with no order number. */
+  orderNumber?: boolean;
+  /** When false, shipped quantity and value are left off each line and the summary. */
+  shipped?: boolean;
+};
+
 /**
  * Build the customer order report as a PDF in the browser and download it as
  * `{fileName}.pdf`. Same groups as the print page: Order details, one box per
  * product, Charges, Order summary. A box never splits across pages.
  */
-export async function saveCustomerOrderPdf(report: CustomerOrderReport, fileName: string) {
+export async function saveCustomerOrderPdf(
+  report: CustomerOrderReport,
+  fileName: string,
+  options: CustomerOrderPdfOptions = {},
+) {
+  const showDetails = options.details !== false;
+  const showOrderNumber = options.orderNumber !== false;
+  const showShipped = options.shipped !== false;
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   doc.setProperties({ title: fileName });
@@ -82,10 +98,15 @@ export async function saveCustomerOrderPdf(report: CustomerOrderReport, fileName
     doc.line(x1, yy, x2, yy);
   }
 
-  /** Order {n}, customer, and a heavy rule. Printed at the top of every page. */
+  /** Order {n} and customer, or Preview and customer. Printed at the top of every page. */
   function pageHead() {
-    text(`Order ${report.order_no}`, MARGIN_X, y + 9, { size: 10, bold: true });
-    text(report.customer, PAGE_W / 2, y + 9, { size: 10, align: "center" });
+    if (showOrderNumber) {
+      text(`Order ${report.order_no}`, MARGIN_X, y + 9, { size: 10, bold: true });
+      text(report.customer, PAGE_W / 2, y + 9, { size: 10, align: "center" });
+    } else {
+      text("Preview", MARGIN_X, y + 9, { size: 10, bold: true });
+      text(report.customer, PAGE_W - MARGIN_X, y + 9, { size: 10, align: "right" });
+    }
     hLine(MARGIN_X, PAGE_W - MARGIN_X, y + 14, INK, 1.5);
     y += 22;
   }
@@ -214,7 +235,7 @@ export async function saveCustomerOrderPdf(report: CustomerOrderReport, fileName
     }
     return yy + 6 - top;
   };
-  box("Order details", { body: details });
+  if (showDetails) box("Order details", { body: details });
 
   // ---- Merchandise -------------------------------------------------------
   function merchandiseBody(line: OrderReportLine): Body {
@@ -312,7 +333,7 @@ export async function saveCustomerOrderPdf(report: CustomerOrderReport, fileName
       if (draw) {
         const parts: [string, string, boolean][] = [
           ["Total", String(line.ordered), false],
-          ["Shipped", String(line.shipped), false],
+          ...(showShipped ? [["Shipped", String(line.shipped), false] as [string, string, boolean]] : []),
           ["Extended", usd.format(line.extended), true],
         ];
         let cx = x + w;
@@ -332,7 +353,12 @@ export async function saveCustomerOrderPdf(report: CustomerOrderReport, fileName
   if (report.merchandise.length === 0) {
     ensure(20);
     y += 7;
-    text("No merchandise on this order.", MARGIN_X, y + 9, { size: 9, color: MUTED });
+    text(
+      showOrderNumber ? "No merchandise on this order." : "The cart is empty.",
+      MARGIN_X,
+      y + 9,
+      { size: 9, color: MUTED },
+    );
     y += 14;
   }
   for (const line of report.merchandise) {
@@ -411,13 +437,17 @@ export async function saveCustomerOrderPdf(report: CustomerOrderReport, fileName
     { label: "Surcharges", amount: usd.format(summary.surcharge), ruleBelow: true },
     { label: "Freight", amount: usd.format(summary.freight), ruleBelow: true },
     { label: "Grand total", amount: usd.format(summary.total), bold: true, big: true },
-    {
-      qty: String(summary.shipped_qty),
-      label: "Shipped",
-      amount: usd.format(summary.shipped_value),
-      muted: true,
-      ruleAbove: true,
-    },
+    ...(showShipped
+      ? [
+          {
+            qty: String(summary.shipped_qty),
+            label: "Shipped",
+            amount: usd.format(summary.shipped_value),
+            muted: true,
+            ruleAbove: true,
+          },
+        ]
+      : []),
   ];
   const summaryBody: Body = (draw, x, top, w) => {
     const tableW = w * 0.6;

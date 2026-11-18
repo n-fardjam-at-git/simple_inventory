@@ -17,7 +17,7 @@ import { RequestProductsPanel } from "./RequestProductsPanel";
 import type { RequestAddress, RequestLine, RequestOrder } from "./types";
 
 function statusLabel(status: string) {
-  if (status === "submitted") return "Sent";
+  if (status === "submitted") return "Submitted";
   if (status === "accepted") return "Accepted";
   return "Draft";
 }
@@ -201,6 +201,9 @@ function OrderDetails({
               <Address title="Ship to" lines={order.ship} />
               <Address title="Bill to" lines={order.bill} />
             </div>
+            <Section title="Staff reply">
+              <p className="whitespace-pre-wrap text-[13px]">{order.staff_reply || "—"}</p>
+            </Section>
             <Section title="Notes">
               <p className="whitespace-pre-wrap text-[13px]">{order.notes || "—"}</p>
             </Section>

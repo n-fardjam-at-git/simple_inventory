@@ -9,9 +9,18 @@ import { saveCustomerOrderPdf } from "@/lib/customer-order-pdf";
 export function SavePdfButton({
   report,
   fileName,
+  details = true,
+  orderNumber = true,
+  shipped = true,
 }: {
   report: CustomerOrderReport;
   fileName: string;
+  /** When false, the PDF leaves out the Order details box. */
+  details?: boolean;
+  /** When false, the PDF head is Preview and the customer, with no order number. */
+  orderNumber?: boolean;
+  /** When false, the PDF leaves out shipped quantity and value. */
+  shipped?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -21,7 +30,7 @@ export function SavePdfButton({
     setBusy(true);
     setErr(null);
     try {
-      await saveCustomerOrderPdf(report, fileName);
+      await saveCustomerOrderPdf(report, fileName, { details, orderNumber, shipped });
     } catch {
       setErr("Could not make the PDF.");
     } finally {

@@ -2,15 +2,20 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Btn, PageTitle } from "@/components/ui";
-import { ComboBox } from "@/components/ComboBox";
+import { PageTitle } from "@/components/ui";
+import { Busy } from "@/components/WorkingBeside";
 import { DismissNote } from "@/components/DismissNote";
 import { FitList, FitPage } from "@/components/list/FitList";
 import { SelectableRow } from "@/components/list/ListTable";
 import { ProductThumb, type ProductPhoto } from "@/components/ProductThumb";
 import { SysAddToCart, SysCart } from "@/components/icons/SysImages";
-import { addCartToRequest, createRequestFromCart } from "../my-orders/actions";
+import { addCartToRequest, createRequestFromCart, type RequestHeaderInput } from "../my-orders/actions";
+import type { SeasonRow } from "@/lib/season";
+import type { RequestAddress } from "../my-orders/types";
+import { PostOrderPopup } from "./PostOrderPopup";
 import { AvailableSizesPopup } from "./AvailableSizesPopup";
+import { ShopQtyPopup } from "./ShopQtyPopup";
+import { cartKey, readCart, type CartLine } from "./cart";
 
 export type ShopProduct = {
   id: string;
@@ -29,10 +34,6 @@ export type DraftOrder = { id: string; request_no: number };
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
-function cartKey(customerId: string) {
-  return `shop-cart:${customerId}`;
-}
-
 function isId(value: string) {
   return /^[0-9a-f-]{36}$/i.test(value);
 }
@@ -41,24 +42,33 @@ export function ShopWorkspace({
   customerId,
   products,
   drafts,
+  seasons,
+  addresses,
 }: {
   customerId: string;
   products: ShopProduct[];
   drafts: DraftOrder[];
+  seasons: SeasonRow[];
+  addresses: RequestAddress[];
 }) {
   const router = useRouter();
-  const [cart, setCart] = useState<string[]>([]);
+  const [cart, setCart] = useState<CartLine[]>([]);
   const [ready, setReady] = useState(false);
   const [draftId, setDraftId] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [busy, setBusy] = useState<"new" | "add" | null>(null);
   const [sizesFor, setSizesFor] = useState<ShopProduct | null>(null);
+  const [qtyFor, setQtyFor] = useState<ShopProduct | null>(null);
+  const [postOpen, setPostOpen] = useState(false);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(cartKey(customerId));
-    const ids = raw ? (JSON.parse(raw) as string[]) : [];
-    setCart(Array.isArray(ids) ? ids.filter((id) => products.some((product) => product.id === id)) : []);
+    setCart(
+      readCart(
+        window.localStorage.getItem(cartKey(customerId)),
+        new Set(products.map((product) => product.id)),
+      ),
+    );
     setReady(true);
   }, [customerId, products]);
 
@@ -67,9 +77,9 @@ export function ShopWorkspace({
     window.localStorage.setItem(cartKey(customerId), JSON.stringify(cart));
   }, [ready, customerId, cart]);
 
-  const inCart = new Set(cart);
+  const inCart = new Set(cart.map((line) => line.productId));
   const chosen = cart
-    .map((id) => products.find((product) => product.id === id))
+    .map((line) => products.find((product) => product.id === line.productId))
     .filter((product): product is ShopProduct => Boolean(product));
 
   function finish(result: string) {
@@ -82,24 +92,27 @@ export function ShopWorkspace({
     router.refresh();
   }
 
-  function createOrder() {
-    if (busy) return;
+  async function postOrder(header: RequestHeaderInput) {
+    if (busy) return "Wait for the current order to finish.";
     setBusy("new");
-    start(async () => {
-      try {
-        finish(await createRequestFromCart(cart));
-      } finally {
-        setBusy(null);
-      }
-    });
+    try {
+      const result = await createRequestFromCart(cart, header);
+      if (!isId(result)) return result;
+      setPostOpen(false);
+      finish(result);
+      return null;
+    } finally {
+      setBusy(null);
+    }
   }
 
   function addToOrder() {
-    if (busy || !draftId) return;
+    const targetId = drafts.length === 1 ? drafts[0].id : draftId;
+    if (busy || !targetId) return;
     setBusy("add");
     start(async () => {
       try {
-        finish(await addCartToRequest(draftId, cart));
+        finish(await addCartToRequest(targetId, cart));
       } finally {
         setBusy(null);
       }
@@ -156,19 +169,17 @@ export function ShopWorkspace({
                           setSizesFor(product);
                         }}
                       >
-                        Sizes
+                        Available sizes
                       </button>
                       <button
                         type="button"
-                        className="inline-flex cursor-pointer disabled:cursor-default disabled:opacity-40"
-                        disabled={added}
-                        aria-label={added ? "In cart" : "Add to cart"}
-                        title={added ? "In cart" : "Add to cart"}
-                        onClick={() =>
-                          setCart((current) =>
-                            current.includes(product.id) ? current : [...current, product.id],
-                          )
-                        }
+                        className={`inline-flex cursor-pointer ${added ? "opacity-40" : ""}`}
+                        aria-label={added ? "Change sizes" : "Add to cart"}
+                        title={added ? "Change sizes" : "Add to cart"}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setQtyFor(product);
+                        }}
                       >
                         <SysAddToCart />
                       </button>
@@ -204,9 +215,18 @@ export function ShopWorkspace({
                     <span className="tabular-nums text-stone-500">{usd.format(product.price)}</span>
                     <button
                       type="button"
+                      className="rounded border border-stone-300 bg-white px-2 py-0.5 text-xs font-medium text-stone-700 hover:bg-stone-50"
+                      onClick={() => setQtyFor(product)}
+                    >
+                      Sizes
+                    </button>
+                    <button
+                      type="button"
                       className="px-1 text-base leading-none text-stone-500 hover:text-stone-800"
                       aria-label={`Remove ${product.name}`}
-                      onClick={() => setCart((current) => current.filter((id) => id !== product.id))}
+                      onClick={() =>
+                        setCart((current) => current.filter((line) => line.productId !== product.id))
+                      }
                     >
                       ×
                     </button>
@@ -217,41 +237,89 @@ export function ShopWorkspace({
               <p className="text-sm text-stone-500">The cart is empty.</p>
             )}
           </div>
-          <div className="flex shrink-0 flex-wrap items-end gap-2 border-t border-stone-200 pt-3">
-            <Btn type="button" busy={busy === "new"} disabled={!chosen.length || pending} onClick={createOrder}>
-              New order
-            </Btn>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-stone-200 pt-3">
+            <button
+              type="button"
+              disabled={!chosen.length || pending || busy === "new"}
+              onClick={() => setPostOpen(true)}
+              className="relative h-11 overflow-hidden rounded-lg border border-[#FDE68A]/60 bg-[linear-gradient(135deg,#F59E0B,#D97706)] px-4 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(217,119,6,0.28)] disabled:opacity-40"
+            >
+              <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+              <span className="relative">Post order</span>
+            </button>
             {drafts.length ? (
               <>
-                <label className="min-w-40 flex-1">
-                  <span className="mb-1 block text-xs text-stone-500">Open order</span>
-                  <ComboBox
-                    allowEmpty
-                    placeholder="Order"
-                    className="w-full rounded border py-1 pr-6 pl-2"
+                {drafts.length > 1 ? (
+                  <select
+                    className="h-11 rounded-lg border border-stone-300 bg-white px-2 text-sm"
                     value={draftId}
-                    onChange={setDraftId}
-                    options={drafts.map((draft) => ({
-                      id: draft.id,
-                      label: `Order ${draft.request_no}`,
-                    }))}
-                  />
-                </label>
-                <Btn
-                  type="button"
-                  busy={busy === "add"}
-                  disabled={!chosen.length || !draftId || pending}
-                  onClick={addToOrder}
-                >
-                  Add to this order
-                </Btn>
+                    aria-label="Open order"
+                    onChange={(event) => setDraftId(event.target.value)}
+                  >
+                    <option value="">Order</option>
+                    {drafts.map((draft) => (
+                      <option key={draft.id} value={draft.id}>
+                        Order {draft.request_no}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                <Busy on={busy === "add"} side="right">
+                  <button
+                    type="button"
+                    disabled={!chosen.length || pending || busy === "add" || (drafts.length > 1 && !draftId)}
+                    onClick={addToOrder}
+                    className="relative h-11 overflow-hidden rounded-lg border border-[#FDE68A]/60 bg-[linear-gradient(135deg,#F59E0B,#D97706)] px-4 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(217,119,6,0.28)] disabled:opacity-40"
+                  >
+                    <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+                    <span className="relative">Add to open order</span>
+                  </button>
+                </Busy>
               </>
             ) : null}
+            <button
+              type="button"
+              disabled={!chosen.length}
+              onClick={() => {
+                window.localStorage.setItem(cartKey(customerId), JSON.stringify(cart));
+                window.open("/shop/preview", "_blank", "noopener");
+              }}
+              className="h-11 rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-800 disabled:opacity-40"
+            >
+              Preview order
+            </button>
           </div>
         </div>
       </div>
       {sizesFor ? (
         <AvailableSizesPopup product={sizesFor} onClose={() => setSizesFor(null)} />
+      ) : null}
+      {postOpen ? (
+        <PostOrderPopup
+          seasons={seasons}
+          addresses={addresses}
+          posting={busy === "new"}
+          onPost={postOrder}
+          onClose={() => setPostOpen(false)}
+        />
+      ) : null}
+      {qtyFor ? (
+        <ShopQtyPopup
+          product={qtyFor}
+          cells={cart.find((line) => line.productId === qtyFor.id)?.cells ?? []}
+          onAdd={(cells) => {
+            setCart((current) => {
+              const index = current.findIndex((line) => line.productId === qtyFor.id);
+              const line = { productId: qtyFor.id, cells };
+              if (index < 0) return [...current, line];
+              const next = [...current];
+              next[index] = line;
+              return next;
+            });
+            setQtyFor(null);
+          }}
+          onClose={() => setQtyFor(null)}
+        />
       ) : null}
     </FitPage>
   );

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRoles } from "@/lib/auth";
 import { productImageUrl } from "@/lib/product-images";
 import type { ProductPhoto } from "@/components/ProductThumb";
+import { asSeasonRows } from "@/lib/season";
+import type { RequestAddress } from "../my-orders/types";
 import { ShopWorkspace, type DraftOrder, type ShopProduct } from "./ShopWorkspace";
 
 type Named = { name: string };
@@ -85,18 +87,27 @@ export default async function ShopPage() {
       images: imagesByProduct.get(product.id) ?? [],
     };
   });
-  const { data: drafts } = await supabase
-    .from("customer_order_requests")
-    .select("id, request_no")
-    .eq("customer_id", customerId)
-    .eq("status", "draft")
-    .order("request_no", { ascending: false });
+  const [{ data: drafts }, { data: seasons }, { data: addresses }] = await Promise.all([
+    supabase
+      .from("customer_order_requests")
+      .select("id, request_no")
+      .eq("customer_id", customerId)
+      .eq("status", "draft")
+      .order("request_no", { ascending: false }),
+    supabase.from("seasons").select("id, year, start_season, is_combo, season"),
+    supabase
+      .from("customer_addresses")
+      .select("id, address_type, location_name, address_line1, city")
+      .eq("customer_id", customerId),
+  ]);
 
   return (
     <ShopWorkspace
       customerId={customerId}
       products={catalog}
       drafts={(drafts ?? []) as DraftOrder[]}
+      seasons={asSeasonRows(seasons ?? [])}
+      addresses={(addresses ?? []) as RequestAddress[]}
     />
   );
 }

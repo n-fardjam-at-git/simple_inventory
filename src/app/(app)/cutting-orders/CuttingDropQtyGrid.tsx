@@ -7,7 +7,7 @@ import type { Cell, MatrixDrop, MatrixSize } from "@/components/matrix/QtyMatrix
 import { isNoDropAxis, visibleDrops } from "@/lib/size-code";
 
 const CELL =
-  "h-6 w-full min-w-0 rounded border border-stone-300 bg-white px-0 text-center text-xs focus:outline-none focus:ring-2 focus:ring-teal-700";
+  "h-6 w-full min-w-0 rounded border border-stone-300 px-0 text-center text-xs focus:outline-none focus:ring-2 focus:ring-teal-700";
 const DROP_CELL =
   "h-6 w-full rounded border border-stone-300 bg-white px-0.5 py-0 text-xs focus:outline-none focus:ring-2 focus:ring-teal-700";
 const PAD = "px-0.5 py-0";
@@ -130,6 +130,8 @@ export function CuttingDropQtyGrid({
   qtyOnly = false,
   linePrice,
   onExtendedChange,
+  available,
+  fitWidth = false,
 }: {
   sizes: MatrixSize[];
   drops: MatrixDrop[];
@@ -142,6 +144,10 @@ export function CuttingDropQtyGrid({
   /** Line price used to report the extended total. */
   linePrice?: number;
   onExtendedChange?: (amount: number) => void;
+  /** Size/drop cells with on-hand quantity. Those cells use a light green background. */
+  available?: { size_id: string; drop_id: string }[];
+  /** Columns share the popup width instead of scrolling sideways. */
+  fitWidth?: boolean;
 }) {
   const sortedSizes = [...sizes].sort((a, b) => a.sort_order - b.sort_order);
   const hideDrop = isNoDropAxis(drops);
@@ -149,6 +155,7 @@ export function CuttingDropQtyGrid({
     ? []
     : visibleDrops([...drops].sort((a, b) => a.sort_order - b.sort_order));
   const lookup = new Map(cells.map((c) => [`${c.size_id}:${c.drop_id}`, c.qty]));
+  const inStock = new Set((available ?? []).map((cell) => `${cell.size_id}:${cell.drop_id}`));
   const gridRef = useRef<HTMLDivElement>(null);
   const [focusDropKey, setFocusDropKey] = useState<string | null>(null);
   const [rows, setRows] = useState<DropRow[]>(() => seedRows(drops, cells, qtyOnly));
@@ -279,14 +286,19 @@ export function CuttingDropQtyGrid({
         setQtyMap((prev) => ({ ...prev, [`${parts[1]}:${parts[2]}`]: Number(t.value) || 0 }));
       }}
     >
-      <table className="min-w-0 w-full flex-1 table-fixed border-collapse bg-white text-xs">
+      <table
+        className={`${fitWidth ? "w-max" : "min-w-0 w-full flex-1 table-fixed"} border-collapse bg-white text-xs`}
+      >
         <thead>
           <tr>
             {hideDrop ? null : (
               <th className={`w-16 border border-stone-200 bg-stone-100 ${PAD} text-left`}>Drop</th>
             )}
             {sortedSizes.map((s) => (
-              <th key={s.id} className={`min-w-8 border border-stone-200 bg-stone-100 ${SIZE_PAD} text-center`}>
+              <th
+                key={s.id}
+                className={`${fitWidth ? "w-12 max-w-12" : "min-w-8"} border border-stone-200 bg-stone-100 ${SIZE_PAD} text-center`}
+              >
                 {s.code}
               </th>
             ))}
@@ -340,16 +352,21 @@ export function CuttingDropQtyGrid({
                     cells.find((cell) => cell.size_id === s.id && cell.drop_id === row.dropId)?.upcharge ??
                       0,
                   );
+                  const stocked = Boolean(row.dropId) && inStock.has(`${s.id}:${row.dropId}`);
                   return (
-                    <td key={s.id} className="min-w-8 border border-stone-200 bg-white p-0 text-center">
+                    <td
+                      key={s.id}
+                      className={`${fitWidth ? "w-12 max-w-12" : "min-w-8"} border border-stone-200 p-0 text-center ${stocked ? "bg-green-100" : "bg-white"}`}
+                    >
                       {hideDrop && col === 0 && row.dropId ? (
                         <input type="hidden" name={`keepDrop:${row.dropId}`} value={row.dropId} />
                       ) : null}
                       {editable && row.dropId ? (
                         <span className="inline-flex items-start justify-center gap-0.5">
                           <NumericInput
-                            className={CELL}
+                            className={`${CELL} ${stocked ? "bg-green-100" : "bg-white"}`}
                             inputMode="numeric"
+                            maxLength={fitWidth ? 4 : undefined}
                             name={`${namePrefix}:${s.id}:${row.dropId}`}
                             defaultValue={blankZero(qty)}
                             data-col={col + dropCol}

@@ -11,13 +11,27 @@ export default async function AppLayout({
   const profile = await requireUser();
   const tradeName = await getCompanyName();
   let submittedPackingLists = 0;
-  if (profile.role === "admin" || profile.role === "warehouse") {
+  let submittedOrderRequests = 0;
+  const packing = profile.role === "admin" || profile.role === "warehouse";
+  const drafts = packing || profile.role === "sales_rep";
+  if (packing || drafts) {
     const supabase = await createClient();
-    const { count } = await supabase
-      .from("vendor_advices")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "submitted");
-    submittedPackingLists = count ?? 0;
+    const [packingCount, draftCount] = await Promise.all([
+      packing
+        ? supabase
+            .from("vendor_advices")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "submitted")
+        : Promise.resolve({ count: 0 }),
+      drafts
+        ? supabase
+            .from("customer_order_requests")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "submitted")
+        : Promise.resolve({ count: 0 }),
+    ]);
+    submittedPackingLists = packingCount.count ?? 0;
+    submittedOrderRequests = draftCount.count ?? 0;
   }
   return (
     <AppShell
@@ -25,6 +39,7 @@ export default async function AppLayout({
       displayName={profile.display_name}
       role={profile.role}
       submittedPackingLists={submittedPackingLists}
+      submittedOrderRequests={submittedOrderRequests}
     >
       {children}
     </AppShell>

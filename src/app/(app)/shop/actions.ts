@@ -81,3 +81,101 @@ export async function loadAvailableSizes(productId: string): Promise<AvailableSi
       .filter((row) => row.amount > 0),
   };
 }
+
+export type ShopQtyMatrix = {
+  sizes: MatrixSize[];
+  drops: MatrixDrop[];
+  available: { size_id: string; drop_id: string }[];
+};
+
+/** Sizes and drops for the shop order grid. */
+export async function loadShopQtyMatrix(productId: string): Promise<ShopQtyMatrix | string> {
+  if (!productId) return "Pick a product.";
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return "Sign in again.";
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profile?.role !== "customer") return "Sign in again.";
+
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .eq("type", PRODUCT_TYPE.merchandise)
+    .eq("is_active", true)
+    .eq("published", true)
+    .maybeSingle();
+  if (productError) return productError.message;
+  if (!product) return "That product is not in the shop.";
+
+  const [{ data: sizeRows }, { data: dropRows }, { data: stockRows, error: stockError }] = await Promise.all([
+    supabase
+      .from("product_sizes")
+      .select("size_chart_sizes ( id, code, sort_order )")
+      .eq("product_id", productId),
+    supabase
+      .from("product_drops")
+      .select("size_chart_drops ( id, code, sort_order )")
+      .eq("product_id", productId),
+    supabase.from("inventory").select("size_id, drop_id, qty_on_hand").eq("product_id", productId),
+  ]);
+  if (stockError) return stockError.message;
+  const dim = (raw: unknown) => (Array.isArray(raw) ? raw[0] : raw) as MatrixSize | null;
+  const keep = (row: MatrixSize | null): row is MatrixSize => Boolean(row);
+  return {
+    sizes: (sizeRows ?? [])
+      .map((row) => dim(row.size_chart_sizes))
+      .filter(keep)
+      .sort((a, b) => a.sort_order - b.sort_order),
+    drops: (dropRows ?? [])
+      .map((row) => dim(row.size_chart_drops))
+      .filter(keep)
+      .sort((a, b) => a.sort_order - b.sort_order),
+    available: (stockRows ?? [])
+      .filter((row) => Number(row.qty_on_hand ?? 0) > 0)
+      .map((row) => ({ size_id: row.size_id, drop_id: row.drop_id })),
+  };
+}
+
+export type ShopNextCutting = {
+  arrives: string;
+  cells: { size_id: string; drop_id: string }[];
+};
+
+/** Soonest open cutting for a shop product. Date and ordered sizes only, no quantities. */
+export async function loadShopNextCutting(productId: string): Promise<ShopNextCutting | null | string> {
+  if (!productId) return "Pick a product.";
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return "Sign in again.";
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profile?.role !== "customer") return "Sign in again.";
+
+  const { data, error } = await supabase.rpc("shop_next_cutting", { p_product_id: productId });
+  if (error) {
+    if (error.message.includes("shop_next_cutting")) {
+      return "Run the next-cutting SQL in the editor, then try again.";
+    }
+    return error.message;
+  }
+  if (!data) return null;
+  const row = data as { arrives?: string; cells?: { size_id: string; drop_id: string }[] | null };
+  const arrives = String(row.arrives ?? "").slice(0, 10);
+  if (!arrives) return null;
+  return {
+    arrives,
+    cells: (row.cells ?? []).map((cell) => ({ size_id: cell.size_id, drop_id: cell.drop_id })),
+  };
+}
