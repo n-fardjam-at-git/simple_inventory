@@ -397,7 +397,7 @@ function OrderDetailsPanel({
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pt-3 [&>*]:shrink-0">
             <Section cols={2}>
               <Fact label="Season" value={order.future_season || "—"} />
-              <Fact label="Cancel date" value={order.cancel_date || "—"} />
+              <Fact label="Deliver by" value={order.cancel_date || "—"} />
             </Section>
             <Section title="Customer" cols={4}>
               <Fact label="Account" value={order.account_no == null ? "—" : String(order.account_no)} />

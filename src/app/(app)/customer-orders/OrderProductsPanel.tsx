@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { DockedPanel } from "@/components/filter/DockedPanel";
@@ -56,6 +56,64 @@ export type CatalogChoice = { id: string; label: string; item_id: string | null 
 export type ChargeChoice = { id: string; label: string; type: number; price: number };
 export type SetItem = { id: string; name: string };
 
+export type OrderProductWrites = {
+  addProduct: (
+    orderId: string,
+    productId: string,
+    draft?: { price: number; upcharges: { size_id: string; drop_id: string; amount: number }[] },
+  ) => Promise<string | null | undefined>;
+  addCharge: (orderId: string, productId: string, price: number, qty: number) => Promise<string | null | undefined>;
+  saveQty: (
+    orderId: string,
+    productId: string,
+    status: string,
+    formData: FormData,
+  ) => Promise<string | null | undefined>;
+  savePrice: (
+    orderId: string,
+    productId: string,
+    price: number,
+    upcharges: { size_id: string; drop_id: string; amount: number }[],
+  ) => Promise<string | null | undefined>;
+  saveCharge: (
+    orderId: string,
+    productId: string,
+    status: string,
+    price: number,
+    qty: number,
+  ) => Promise<string | null | undefined>;
+  removeProduct: (orderId: string, productId: string) => Promise<string | null | undefined>;
+  pasteCells: (
+    orderId: string,
+    productId: string,
+    cells: { size_id: string; drop_id: string; qty: number }[],
+    itemId: string,
+    sizeChartId: string,
+    mode: "replace" | "combine",
+  ) => Promise<string | null | undefined>;
+};
+
+const defaultWrites: OrderProductWrites = {
+  addProduct: addCustomerOrderProductId,
+  addCharge: addCustomerOrderCharge,
+  saveQty: saveCustomerOrderQty,
+  savePrice: saveCustomerOrderPrice,
+  saveCharge: saveCustomerOrderCharge,
+  removeProduct: removeCustomerOrderProductId,
+  pasteCells: pasteCustomerOrderCells,
+};
+
+const WritesContext = createContext<OrderProductWrites>(defaultWrites);
+const PanelModeContext = createContext({ showLifecycle: true, readOnly: false });
+
+function useWrites() {
+  return useContext(WritesContext);
+}
+
+function usePanelMode() {
+  return useContext(PanelModeContext);
+}
+
 const ANY: SetItem = { id: "any", name: "Any" };
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const MONEY =
@@ -98,6 +156,10 @@ export function OrderProductsPanel({
   setItems,
   catalog,
   charges,
+  heading,
+  writes = defaultWrites,
+  showLifecycle = true,
+  readOnly = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -108,6 +170,13 @@ export function OrderProductsPanel({
   setItems: SetItem[];
   catalog: CatalogChoice[];
   charges: ChargeChoice[];
+  /** Replaces the customer-order title. Draft orders pass PO No. */
+  heading?: string;
+  writes?: OrderProductWrites;
+  /** Line status and shipped quantity. A proposal has neither. */
+  showLifecycle?: boolean;
+  /** Accepted proposals stay view-only. */
+  readOnly?: boolean;
 }) {
   const [pickItemId, setPickItemId] = useState<string | null>(null);
   const [copyProductId, setCopyProductId] = useState<string | null>(null);
@@ -140,21 +209,24 @@ export function OrderProductsPanel({
     }
   }, [open, orderId]);
 
+  const title =
+    heading ??
+    (orderNo != null ? `${customer?.trim() || "Order"} · Order No ${orderNo}` : customer?.trim() || "Order");
+
   return (
+    <WritesContext.Provider value={writes}>
+    <PanelModeContext.Provider value={{ showLifecycle, readOnly }}>
     <>
     <DockedPanel
       open={open}
       onClose={onClose}
-      title={
-        orderNo != null
-          ? `${customer?.trim() || "Order"} · Order No ${orderNo}`
-          : customer?.trim() || "Order"
-      }
+      title={title}
       side="right"
       width="95%"
     >
       {open && orderId ? (
         <div className="flex min-h-0 flex-1 flex-col">
+          {readOnly ? null : (
           <div className="mb-3 flex shrink-0 justify-center">
             <div ref={barRef} className="min-w-56 max-w-full rounded-lg border border-stone-300 bg-white">
               <div className="border-b border-stone-300 bg-stone-100 px-3 py-2 text-center text-sm font-medium text-stone-700">
@@ -190,6 +262,7 @@ export function OrderProductsPanel({
               </div>
             </div>
           </div>
+          )}
           <OrderProductTable
             pickedInvProductId={pickedInv?.productId ?? null}
             onPickedInvClose={() => setPickedInv(null)}
@@ -240,20 +313,24 @@ export function OrderProductsPanel({
       }}
       onPaste={(copy, mode) => {
         if (!copyLine) return Promise.resolve("Open a product first.");
-        return pasteCustomerOrderCells(
-          copyLine.customer_order_id,
-          copyLine.product_id,
-          copy.cells,
-          copy.itemId,
-          copy.sizeChartId,
-          mode,
-        );
+        return writes
+          .pasteCells(
+            copyLine.customer_order_id,
+            copyLine.product_id,
+            copy.cells,
+            copy.itemId,
+            copy.sizeChartId,
+            mode,
+          )
+          .then((message) => message ?? null);
       }}
       onClear={() => setCopies([])}
       onDelete={(id) => setCopies((cur) => cur.filter((copy) => copy.id !== id))}
       onClose={() => setCopyProductId(null)}
     />
     </>
+    </PanelModeContext.Provider>
+    </WritesContext.Provider>
   );
 }
 
@@ -276,6 +353,7 @@ function ChargePickButton({
   const popRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
+  const writes = useWrites();
   const chosen = options.find((charge) => charge.id === productId) ?? null;
   const freight = chosen?.type === PRODUCT_TYPE.freight;
 
@@ -323,7 +401,7 @@ function ChargePickButton({
     const price = Number(formData.get("price"));
     const qty = freight ? 1 : Number(formData.get("qty"));
     start(async () => {
-      const message = await addCustomerOrderCharge(orderId, chosen.id, price, qty);
+      const message = await writes.addCharge(orderId, chosen.id, price, qty);
       if (message) {
         setErr(message);
         return;
@@ -448,6 +526,8 @@ function ItemPickButton({
   const [pending, start] = useTransition();
   const popRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const writes = useWrites();
+  const router = useRouter();
   const list = inventory ? inventoryOptions : options;
 
   useEffect(() => {
@@ -540,11 +620,12 @@ function ItemPickButton({
       })
       .filter((row) => row.size_id && row.drop_id && row.amount > 0);
     start(async () => {
-      const message = await addCustomerOrderProductId(orderId, productId, { price, upcharges });
+      const message = await writes.addProduct(orderId, productId, { price, upcharges });
       if (message) {
         setErr(message);
         return;
       }
+      router.refresh();
       onClose();
     });
   }
@@ -752,8 +833,10 @@ function ProductLineRow({
   const list = useList();
   const router = useRouter();
   const refreshRow = useRefreshRow(row);
+  const writes = useWrites();
+  const { showLifecycle, readOnly } = usePanelMode();
   const id = `${row.customer_order_id}:${row.product_id}`;
-  const dirty = status !== row.status || matrixDirty;
+  const dirty = (showLifecycle && status !== row.status) || matrixDirty;
   const [invOpen, setInvOpen] = useState(false);
   const invBtn = useRef<HTMLButtonElement>(null);
   const invArmed = useRef(false);
@@ -797,7 +880,7 @@ function ProductLineRow({
       setSaving(true);
       void (async () => {
         try {
-          const message = await saveCustomerOrderQty(
+          const message = await writes.saveQty(
             row.customer_order_id,
             row.product_id,
             status,
@@ -860,6 +943,7 @@ function ProductLineRow({
             </button>
           ) : null}
         </div>
+        {showLifecycle ? (
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs leading-tight">
           {editing ? (
             <select
@@ -881,6 +965,7 @@ function ProductLineRow({
             {row.shipped} of {row.ordered}
           </span>
         </div>
+        ) : null}
         {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
         {priceOpen ? (
           <PriceExtrasCard
@@ -926,12 +1011,16 @@ function ProductLineRow({
           </form>
         ) : (
           <div
-            className="cursor-pointer"
-            title="Double click to edit"
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              requestEdit();
-            }}
+            className={readOnly ? undefined : "cursor-pointer"}
+            title={readOnly ? undefined : "Double click to edit"}
+            onDoubleClick={
+              readOnly
+                ? undefined
+                : (e) => {
+                    e.stopPropagation();
+                    requestEdit();
+                  }
+            }
           >
             <CuttingDropQtyGrid
               qtyOnly
@@ -947,6 +1036,16 @@ function ProductLineRow({
       <td className="h-px w-52 pr-2 align-top">
         <div className="flex h-full flex-col justify-between gap-1 pt-1">
           <div className="min-w-36">
+          {readOnly ? (
+            <button
+              ref={invBtn}
+              type="button"
+              className={`text-xs underline ${invOpen ? "font-medium text-teal-800" : "text-stone-700"}`}
+              onClick={toggleInventory}
+            >
+              Inventory
+            </button>
+          ) : (
           <RowButtons
             editing={editing}
             dirty={dirty}
@@ -984,7 +1083,7 @@ function ProductLineRow({
                 : () => {
                     if (!confirm(`Remove ${row.label}?`)) return;
                     start(async () => {
-                      const message = await removeCustomerOrderProductId(
+                      const message = await writes.removeProduct(
                         row.customer_order_id,
                         row.product_id,
                       );
@@ -994,6 +1093,7 @@ function ProductLineRow({
                   }
             }
           />
+          )}
           </div>
           <div className="mt-1 flex justify-end">
             <span className={MONEY}>{usd.format(extended)}</span>
@@ -1017,9 +1117,11 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
   const list = useList();
   const router = useRouter();
   const refreshRow = useRefreshRow(row);
+  const writes = useWrites();
+  const { showLifecycle, readOnly } = usePanelMode();
   const id = `${row.customer_order_id}:${row.product_id}`;
   const dirty =
-    status !== row.status ||
+    (showLifecycle && status !== row.status) ||
     priceText !== String(row.price) ||
     (!freight && qtyText !== String(row.qty ?? 1));
   const priceNum = Number(priceText);
@@ -1048,7 +1150,7 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
       setSaving(true);
       void (async () => {
         try {
-          const message = await saveCustomerOrderCharge(
+          const message = await writes.saveCharge(
             row.customer_order_id,
             row.product_id,
             status,
@@ -1096,6 +1198,7 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
     <SelectableRow id={id}>
       <td className="w-[16%] min-w-0 break-words pr-2">
         <div className="font-medium leading-tight">{row.label}</div>
+        {showLifecycle ? (
         <div className="mt-1 text-xs leading-tight">
           {editing ? (
             <select
@@ -1114,15 +1217,16 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
             <span className="font-light text-stone-500">{orderStatusLabel(row.status)}</span>
           )}
         </div>
+        ) : null}
         {err ? <DismissNote onDismiss={() => setErr(null)}>{err}</DismissNote> : null}
       </td>
       <td className="w-full min-w-0 pr-1">
         <div className="flex items-center gap-3">
           <div
-            className={editing ? undefined : "cursor-pointer"}
-            title={editing ? undefined : "Double click to edit"}
+            className={editing || readOnly ? undefined : "cursor-pointer"}
+            title={editing || readOnly ? undefined : "Double click to edit"}
             onDoubleClick={
-              editing
+              editing || readOnly
                 ? undefined
                 : (e) => {
                     e.stopPropagation();
@@ -1184,6 +1288,7 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
       <td className="h-px w-52 pr-2 align-top">
         <div className="flex h-full min-h-14 flex-col justify-between gap-1 pt-1">
           <div className="min-w-36 [&>div]:flex-nowrap">
+            {readOnly ? null : (
             <RowButtons
               editing={editing}
               dirty={dirty}
@@ -1198,7 +1303,7 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
                   : () => {
                       if (!confirm(`Remove ${row.label}?`)) return;
                       start(async () => {
-                        const message = await removeCustomerOrderProductId(
+                        const message = await writes.removeProduct(
                           row.customer_order_id,
                           row.product_id,
                         );
@@ -1208,6 +1313,7 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
                     }
               }
             />
+            )}
           </div>
           <div className="mt-1 flex justify-end">
             <span className={MONEY}>{usd.format(editing ? extended : lineExtended(row))}</span>
@@ -1232,6 +1338,7 @@ function PriceExtrasCard({
   const [err, setErr] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [, start] = useTransition();
+  const writes = useWrites();
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1268,7 +1375,7 @@ function PriceExtrasCard({
     setSaving(true);
     start(async () => {
       try {
-        const message = await saveCustomerOrderPrice(
+        const message = await writes.savePrice(
           row.customer_order_id,
           row.product_id,
           price,

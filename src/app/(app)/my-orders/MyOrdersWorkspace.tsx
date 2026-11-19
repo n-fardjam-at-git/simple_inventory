@@ -10,11 +10,11 @@ import { PageTitle, Btn } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
 import { DismissNote } from "@/components/DismissNote";
 import { SysFolder, SysFolderOpen } from "@/components/icons/SysImages";
-import { SHIP_AT_ONCE } from "@/lib/customer-order";
+import { deliverByMessage, LINE_PRICE_NOTICE, SHIP_AT_ONCE, staffReplyText } from "@/lib/customer-order";
 import type { SeasonRow } from "@/lib/season";
 import { deleteRequest, saveRequestHeader, submitRequest } from "./actions";
 import { RequestProductsPanel } from "./RequestProductsPanel";
-import type { RequestAddress, RequestLine, RequestOrder } from "./types";
+import type { RequestAddress, RequestCatalogChoice, RequestLine, RequestOrder, RequestSetItem } from "./types";
 
 function statusLabel(status: string) {
   if (status === "submitted") return "Submitted";
@@ -36,12 +36,16 @@ function addressLabel(address: RequestAddress) {
 export function MyOrdersWorkspace({
   orders,
   lines,
+  setItems,
+  catalog,
   seasons,
   addresses,
   resumeId,
 }: {
   orders: RequestOrder[];
   lines: RequestLine[];
+  setItems: RequestSetItem[];
+  catalog: RequestCatalogChoice[];
   seasons: SeasonRow[];
   addresses: RequestAddress[];
   resumeId: string | null;
@@ -97,6 +101,8 @@ export function MyOrdersWorkspace({
         requestNo={selected?.request_no ?? null}
         lines={lines.filter((line) => line.request_id === selectedId)}
         draft={selected?.status === "draft"}
+        setItems={setItems}
+        catalog={catalog}
       />
     </>
   );
@@ -214,7 +220,11 @@ function OrderDetails({
             <Section>
               <Fact label="Season" value={order.future_season || "—"} />
               <Fact label="Start" value={order.start_date || "—"} />
-              <Fact label="Cancel date" value={order.cancel_date || "—"} />
+              <Fact label="Deliver by" value={order.cancel_date || "—"} />
+            </Section>
+            <Section title="Terms and shipping">
+              <Fact label="Terms" value={order.terms || "—"} />
+              <Fact label="Shipping method" value={order.shipping_method || "—"} />
             </Section>
             <div className="grid grid-cols-2 gap-2">
               <Address title="Ship to" lines={order.ship} />
@@ -224,7 +234,13 @@ function OrderDetails({
               <p className="text-[13px]">{acceptanceLabel(order.customer_acceptance)}</p>
             </Section>
             <Section title="Staff reply">
-              <p className="whitespace-pre-wrap text-[13px]">{order.staff_reply || "—"}</p>
+              <p
+                className={`whitespace-pre-wrap text-sm leading-tight ${
+                  staffReplyText(order.staff_reply).trim() === LINE_PRICE_NOTICE ? "font-light text-red-700" : ""
+                }`}
+              >
+                {staffReplyText(order.staff_reply)}
+              </p>
             </Section>
             <Section title="Notes">
               <p className="whitespace-pre-wrap text-[13px]">{order.notes || "—"}</p>
@@ -383,6 +399,11 @@ function EditCard({
 
   function save() {
     if (saving) return;
+    const deliverBy = deliverByMessage(start, cancel);
+    if (deliverBy) {
+      setErr(deliverBy);
+      return;
+    }
     const form = new FormData();
     form.set("future_season", season);
     form.set("start_date", start);
@@ -461,8 +482,8 @@ function EditCard({
             <input type="date" className="w-full rounded border px-2 py-1" value={start} onChange={(event) => setStart(event.target.value)} />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-xs text-stone-500">Cancel date</span>
-            <input type="date" className="w-full rounded border px-2 py-1" value={cancel} onChange={(event) => setCancel(event.target.value)} />
+            <span className="mb-1 block text-xs text-stone-500">Deliver by</span>
+            <input type="date" required aria-label="Deliver by" className="w-full rounded border px-2 py-1" value={cancel} onChange={(event) => setCancel(event.target.value)} />
           </label>
         </div>
         <div className="mb-3 grid grid-cols-2 gap-3">

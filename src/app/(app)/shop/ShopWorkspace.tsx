@@ -15,6 +15,7 @@ import type { RequestAddress } from "../my-orders/types";
 import { PostOrderPopup } from "./PostOrderPopup";
 import { AvailableSizesPopup } from "./AvailableSizesPopup";
 import { ShopQtyPopup } from "./ShopQtyPopup";
+import { LINE_PRICE_NOTICE } from "@/lib/customer-order";
 import { cartKey, readCart, type CartLine } from "./cart";
 
 export type ShopProduct = {
@@ -122,10 +123,7 @@ export function ShopWorkspace({
   return (
     <FitPage>
       <PageTitle className="mb-0" title="Shop" />
-      <p className="text-sm font-light leading-tight text-red-700">
-        All prices are line prices, any agreed discount will be applied by our staff and will be sent back to you to
-        confirm.
-      </p>
+      <p className="text-sm font-light leading-tight text-red-700">{LINE_PRICE_NOTICE}</p>
       <div className="flex min-h-0 flex-1 gap-3">
         <div className="flex min-h-0 w-2/3 min-w-0 flex-col">
           <FitList

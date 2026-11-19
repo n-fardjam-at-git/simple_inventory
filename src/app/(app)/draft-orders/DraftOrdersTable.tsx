@@ -4,14 +4,16 @@ import { useCallback, useEffect, useState, useTransition, type ReactNode } from 
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
+import { ComboBox } from "@/components/ComboBox";
 import { DismissNote } from "@/components/DismissNote";
 import { WorkingBeside } from "@/components/WorkingBeside";
 import { FitList } from "@/components/list/FitList";
 import { SelectableRow, useList } from "@/components/list/ListTable";
 import { SysFolder, SysFolderOpen } from "@/components/icons/SysImages";
 import { summarizeOrder } from "@/lib/order-summary";
-import { acceptOrderRequest, returnOrderRequest, saveStaffReply } from "./actions";
-import type { DraftOrderLine, DraftOrderRow } from "./types";
+import { LINE_PRICE_NOTICE, staffReplyText } from "@/lib/customer-order";
+import { acceptOrderRequest, returnOrderRequest, saveOrderHandling, saveStaffReply } from "./actions";
+import type { DraftChoice, DraftMethod, DraftOrderLine, DraftOrderRow } from "./types";
 
 const STATUS: Record<string, string> = {
   draft: "Draft",
@@ -19,12 +21,17 @@ const STATUS: Record<string, string> = {
   accepted: "Accepted",
 };
 
+const comboClass = "w-full rounded border bg-white py-1 pr-6 pl-2 text-[13px]";
+
 export function DraftOrdersTable({
   rows,
   lines,
   canAct,
   focusId = null,
   focusNonce = 0,
+  terms,
+  shipmentMethods,
+  salesReps,
   onOpen,
 }: {
   rows: DraftOrderRow[];
@@ -32,6 +39,9 @@ export function DraftOrdersTable({
   canAct: boolean;
   focusId?: string | null;
   focusNonce?: number;
+  terms: DraftChoice[];
+  shipmentMethods: DraftMethod[];
+  salesReps: DraftChoice[];
   onOpen: (id: string) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -74,6 +84,9 @@ export function DraftOrdersTable({
         order={selected}
         lines={selected ? lines.filter((line) => line.request_id === selected.id) : []}
         canAct={canAct}
+        terms={terms}
+        shipmentMethods={shipmentMethods}
+        salesReps={salesReps}
         onOpen={() => {
           if (selected) onOpen(selected.id);
         }}
@@ -94,11 +107,17 @@ function DraftDetails({
   order,
   lines,
   canAct,
+  terms,
+  shipmentMethods,
+  salesReps,
   onOpen,
 }: {
   order: DraftOrderRow | null;
   lines: DraftOrderLine[];
   canAct: boolean;
+  terms: DraftChoice[];
+  shipmentMethods: DraftMethod[];
+  salesReps: DraftChoice[];
   onOpen: () => void;
 }) {
   const router = useRouter();
@@ -184,18 +203,14 @@ function DraftDetails({
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pt-3 [&>*]:shrink-0">
             <Section cols={2}>
               <Fact label="Season" value={order.future_season || "—"} />
-              <Fact label="Cancel date" value={order.cancel_date || "—"} />
+              <Fact label="Deliver by" value={order.cancel_date || "—"} />
             </Section>
-            <Section title="Customer" cols={3}>
-              <Fact label="Account" value={order.account_no == null ? "—" : String(order.account_no)} />
-              <Fact label="Sage" value={order.account || "—"} />
-              <Fact label="Sales rep" value={order.sales_rep || "—"} />
-            </Section>
-            <Section title="Terms and shipping" cols={3}>
-              <Fact label="Terms" value={order.terms || "—"} />
-              <Fact label="Received via" value={order.transmission_method || "—"} />
-              <Fact label="Shipping method" value={order.shipping_method || "—"} />
-            </Section>
+            <OrderHandling
+              order={order}
+              terms={terms}
+              shipmentMethods={shipmentMethods}
+              salesReps={salesReps}
+            />
             <div className="grid grid-cols-2 gap-2">
               <Address title="Ship to" lines={order.ship} />
               <Address title="Bill to" lines={order.bill} />
@@ -312,19 +327,176 @@ function Section({
   );
 }
 
-function StaffReply({ order }: { order: DraftOrderRow }) {
+function withCurrent(options: DraftChoice[], id: string | null, label: string | null, fallback: string) {
+  if (!id || options.some((option) => option.id === id)) return options;
+  return [...options, { id, label: label || fallback }];
+}
+
+function OrderHandling({
+  order,
+  terms,
+  shipmentMethods,
+  salesReps,
+}: {
+  order: DraftOrderRow;
+  terms: DraftChoice[];
+  shipmentMethods: DraftMethod[];
+  salesReps: DraftChoice[];
+}) {
   const router = useRouter();
   const [, start] = useTransition();
-  const [text, setText] = useState(order.staff_reply ?? "");
+  const locked = order.status === "accepted";
+  const [term, setTerm] = useState(order.terms ?? "");
+  const [methodId, setMethodId] = useState(order.shipment_method_id ?? "");
+  const [repId, setRepId] = useState(order.sales_rep_id ?? "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setText(order.staff_reply ?? "");
+    setTerm(order.terms ?? "");
+    setMethodId(order.shipment_method_id ?? "");
+    setRepId(order.sales_rep_id ?? "");
+    setErr(null);
+  }, [order.id, order.terms, order.shipment_method_id, order.sales_rep_id]);
+
+  const dirty =
+    term !== (order.terms ?? "") ||
+    methodId !== (order.shipment_method_id ?? "") ||
+    repId !== (order.sales_rep_id ?? "");
+  const termOptions = withCurrent(terms, order.terms, order.terms, "Terms");
+  const methodOptions = withCurrent(
+    shipmentMethods
+      .filter((method) => method.active || method.id === order.shipment_method_id)
+      .map(({ id, label }) => ({ id, label })),
+    order.shipment_method_id,
+    order.shipping_method,
+    "Shipping method",
+  );
+  const repOptions = withCurrent(salesReps, order.sales_rep_id, order.sales_rep, "Sales rep");
+
+  function save() {
+    if (saving || locked) return;
+    setSaving(true);
+    start(async () => {
+      try {
+        const message = await saveOrderHandling(order.id, term, methodId, repId);
+        if (message) setErr(message);
+        else router.refresh();
+      } finally {
+        setSaving(false);
+      }
+    });
+  }
+
+  return (
+    <>
+      <Section title="Customer" cols={3}>
+        <Fact label="Account" value={order.account_no == null ? "—" : String(order.account_no)} />
+        <Fact label="Sage" value={order.account || "—"} />
+        {locked ? (
+          <Fact label="Sales rep" value={order.sales_rep || "—"} />
+        ) : (
+          <div className="min-w-0">
+            <div className="mb-1 text-[11px] leading-tight text-stone-500">Sales rep</div>
+            <ComboBox
+              allowEmpty
+              placeholder="Sales rep"
+              aria-label="Sales rep"
+              className={comboClass}
+              value={repId}
+              onChange={setRepId}
+              options={repOptions}
+            />
+          </div>
+        )}
+      </Section>
+      <Section title="Terms and shipping" cols={2}>
+        {locked ? (
+          <>
+            <Fact label="Terms" value={order.terms || "—"} />
+            <Fact label="Shipping method" value={order.shipping_method || "—"} />
+          </>
+        ) : (
+          <>
+            <div className="min-w-0">
+              <div className="mb-1 text-[11px] leading-tight text-stone-500">Terms</div>
+              <ComboBox
+                allowEmpty
+                placeholder="Terms"
+                aria-label="Terms"
+                className={comboClass}
+                value={term}
+                onChange={setTerm}
+                options={termOptions}
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="mb-1 text-[11px] leading-tight text-stone-500">Shipping method</div>
+              <ComboBox
+                allowEmpty
+                placeholder="Shipping method"
+                aria-label="Shipping method"
+                className={comboClass}
+                value={methodId}
+                onChange={setMethodId}
+                options={methodOptions}
+              />
+            </div>
+          </>
+        )}
+      </Section>
+      {err ? (
+        <DismissNote className="text-xs text-red-700" onDismiss={() => setErr(null)}>
+          {err}
+        </DismissNote>
+      ) : null}
+      {dirty && !locked ? (
+        <div className="flex items-center gap-2">
+          <span className="relative">
+            {saving ? <WorkingBeside side="right" /> : null}
+            <button
+              type="button"
+              className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+              disabled={saving}
+              onClick={save}
+            >
+              Save
+            </button>
+          </span>
+          <button
+            type="button"
+            className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-50"
+            disabled={saving}
+            onClick={() => {
+              setTerm(order.terms ?? "");
+              setMethodId(order.shipment_method_id ?? "");
+              setRepId(order.sales_rep_id ?? "");
+              setErr(null);
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function StaffReply({ order }: { order: DraftOrderRow }) {
+  const router = useRouter();
+  const [, start] = useTransition();
+  const baseline = staffReplyText(order.staff_reply);
+  const [text, setText] = useState(baseline);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setText(staffReplyText(order.staff_reply));
     setErr(null);
   }, [order.id, order.staff_reply]);
 
-  const dirty = text !== (order.staff_reply ?? "");
+  const dirty = text !== baseline;
+  const notice = text.trim() === LINE_PRICE_NOTICE;
 
   function save() {
     if (saving) return;
@@ -343,7 +515,7 @@ function StaffReply({ order }: { order: DraftOrderRow }) {
   return (
     <Section title="Staff reply">
       <textarea
-        className="w-full rounded border bg-white px-2 py-1 text-[13px]"
+        className={`w-full rounded border bg-white px-2 py-1 text-sm leading-tight ${notice ? "font-light text-red-700" : ""}`}
         rows={3}
         value={text}
         aria-label="Staff reply"
@@ -371,7 +543,7 @@ function StaffReply({ order }: { order: DraftOrderRow }) {
             type="button"
             className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-50"
             disabled={saving}
-            onClick={() => setText(order.staff_reply ?? "")}
+            onClick={() => setText(baseline)}
           >
             Cancel
           </button>
@@ -395,15 +567,17 @@ function Address({ title, lines }: { title: string; lines: string[] }) {
     <section className={GROUP}>
       <GroupHeader>{title}</GroupHeader>
       <div className={GROUP_BODY}>
-        {lines.length ? (
-          lines.map((line, index) => (
-            <p key={index} className="text-[13px] leading-tight text-stone-900">
-              {line}
-            </p>
-          ))
-        ) : (
-          <p className="text-[13px] text-stone-400">—</p>
-        )}
+        <div className="min-h-[calc(3*1.25*13px)] text-[13px] leading-tight">
+          {lines.length ? (
+            lines.map((line, index) => (
+              <p key={index} className="text-stone-900">
+                {line}
+              </p>
+            ))
+          ) : (
+            <p className="text-stone-400">—</p>
+          )}
+        </div>
       </div>
     </section>
   );

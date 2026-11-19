@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { ComboBox } from "@/components/ComboBox";
 import { DismissNote } from "@/components/DismissNote";
 import { Busy } from "@/components/WorkingBeside";
-import { SHIP_AT_ONCE } from "@/lib/customer-order";
+import { deliverByMessage, SHIP_AT_ONCE } from "@/lib/customer-order";
 import type { SeasonRow } from "@/lib/season";
 import type { RequestAddress } from "../my-orders/types";
 import type { RequestHeaderInput } from "../my-orders/actions";
@@ -50,6 +50,11 @@ export function PostOrderPopup({
 
   async function post() {
     if (posting) return;
+    const deliverBy = deliverByMessage(start, cancel);
+    if (deliverBy) {
+      setErr(deliverBy);
+      return;
+    }
     const message = await onPost({
       future_season: season.trim() || null,
       start_date: start.trim() || null,
@@ -122,9 +127,11 @@ export function PostOrderPopup({
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-xs text-stone-500">Cancel date</span>
+            <span className="mb-1 block text-xs text-stone-500">Deliver by</span>
             <input
               type="date"
+              required
+              aria-label="Deliver by"
               className="w-full rounded border px-2 py-1"
               value={cancel}
               onChange={(event) => setCancel(event.target.value)}

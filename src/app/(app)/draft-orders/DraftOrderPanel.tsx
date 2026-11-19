@@ -1,16 +1,52 @@
 "use client";
 
-import { DockedPanel } from "@/components/filter/DockedPanel";
-import { CuttingDropQtyGrid } from "../cutting-orders/CuttingDropQtyGrid";
+import {
+  OrderProductsPanel,
+  type CatalogChoice,
+  type ChargeChoice,
+  type OrderProductLine,
+  type SetItem,
+} from "../customer-orders/OrderProductsPanel";
+import {
+  addRequestCharge,
+  addRequestProduct,
+  pasteRequestCells,
+  removeRequestLine,
+  saveRequestCharge,
+  saveRequestPrice,
+  saveRequestQty,
+} from "./product-actions";
 import type { DraftOrderLine, DraftOrderRow } from "./types";
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const writes = {
+  addProduct: addRequestProduct,
+  addCharge: addRequestCharge,
+  saveQty: saveRequestQty,
+  savePrice: saveRequestPrice,
+  saveCharge: saveRequestCharge,
+  removeProduct: removeRequestLine,
+  pasteCells: pasteRequestCells,
+};
 
-function usDate(value: string | null) {
-  if (!value) return "—";
-  const [y, m, d] = value.slice(0, 10).split("-");
-  if (!y || !m || !d) return value;
-  return `${m}/${d}/${y}`;
+function toLine(line: DraftOrderLine): OrderProductLine {
+  return {
+    customer_order_id: line.request_id,
+    product_id: line.product_id,
+    status: "pending",
+    type: line.type,
+    qty: line.qty,
+    price: line.price,
+    label: line.name,
+    item_id: line.item_id,
+    item_name: line.item || "Item",
+    size_chart_id: line.size_chart_id,
+    ordered: line.ordered,
+    shipped: 0,
+    shipped_value: 0,
+    sizes: line.sizes,
+    drops: line.drops,
+    cells: line.cells,
+  };
 }
 
 export function DraftOrderPanel({
@@ -18,89 +54,34 @@ export function DraftOrderPanel({
   onClose,
   order,
   lines,
+  setItems,
+  catalog,
+  charges,
 }: {
   open: boolean;
   onClose: () => void;
   order: DraftOrderRow | null;
   lines: DraftOrderLine[];
+  setItems: SetItem[];
+  catalog: CatalogChoice[];
+  charges: ChargeChoice[];
 }) {
-  const products = order
-    ? lines
-        .filter((line) => line.request_id === order.id)
-        .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }))
-    : [];
-
+  const productLines = order ? lines.filter((line) => line.request_id === order.id).map(toLine) : [];
   return (
-    <DockedPanel
+    <OrderProductsPanel
       open={open}
       onClose={onClose}
-      title={order ? `PO No ${order.request_no}` : "PO No"}
-      subtitle={order?.customer}
-      side="right"
-      width="95%"
-    >
-      {open && order ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
-          <div className="grid shrink-0 grid-cols-2 gap-x-6 text-xs">
-            <p>
-              <span className="text-stone-500">Season</span> {order.future_season || "—"}
-            </p>
-            <p>
-              <span className="text-stone-500">Start</span> {usDate(order.start_date)}
-            </p>
-            <p>
-              <span className="text-stone-500">Cancel date</span> {usDate(order.cancel_date)}
-            </p>
-            <p>
-              <span className="text-stone-500">Date</span> {usDate(order.created_at)}
-            </p>
-          </div>
-          <div className="grid shrink-0 grid-cols-2 gap-4 text-xs">
-            <div>
-              <p className="mb-0.5 text-[10px] font-semibold tracking-wide text-stone-500 uppercase">Ship to</p>
-              {order.ship.length ? (
-                order.ship.map((line, index) => <p key={index}>{line}</p>)
-              ) : (
-                <p className="text-stone-400">No address</p>
-              )}
-            </div>
-            <div>
-              <p className="mb-0.5 text-[10px] font-semibold tracking-wide text-stone-500 uppercase">Bill to</p>
-              {order.bill.length ? (
-                order.bill.map((line, index) => <p key={index}>{line}</p>)
-              ) : (
-                <p className="text-stone-400">No address</p>
-              )}
-            </div>
-          </div>
-          {order.notes ? (
-            <p className="shrink-0 text-xs">
-              <span className="text-stone-500">Notes</span> {order.notes}
-            </p>
-          ) : null}
-          {products.length === 0 ? (
-            <p className="text-sm text-stone-500">No products on this order.</p>
-          ) : (
-            <ul className="space-y-3">
-              {products.map((line) => (
-                <li key={line.product_id} className="rounded-lg border border-[#ddd5bb] bg-white p-3">
-                  <p className="mb-2 flex items-baseline justify-between gap-2 text-sm">
-                    <span className="font-medium">{line.name}</span>
-                    <span className="tabular-nums">{usd.format(line.price)}</span>
-                  </p>
-                  <CuttingDropQtyGrid
-                    sizes={line.sizes}
-                    drops={line.drops}
-                    cells={line.cells}
-                    editable={false}
-                    qtyOnly
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
-    </DockedPanel>
+      orderId={order?.id ?? null}
+      orderNo={order?.request_no ?? null}
+      customer={order?.customer ?? null}
+      heading={order ? `${order.customer} · PO No ${order.request_no}` : "PO No"}
+      lines={productLines}
+      setItems={setItems}
+      catalog={catalog}
+      charges={charges}
+      writes={writes}
+      showLifecycle={false}
+      readOnly={order?.status === "accepted"}
+    />
   );
 }

@@ -27,7 +27,7 @@ Every group is the same box: a gray title bar (`print-lot-head`), then the body.
 
 ## Order details box
 
-Two columns. Left: customer, terms, shipping method, season (**Ship at once** or the season name). Right: status, start date, cancel date. Under a thin rule, **Ship to** and **Bill to** side by side, each with the customer name over the snapshot address lines. Notes last when present. No account, Sage, or processing block (received via, rep, who entered or updated). Dates print as `MM/DD/YYYY`.
+Two columns. Left: customer, terms, shipping method, season (**Ship at once** or the season name). Right: status, start date, deliver by. Under a thin rule, **Ship to** and **Bill to** side by side, each with the customer name over the snapshot address lines. Notes last when present. No account, Sage, or processing block (received via, rep, who entered or updated). Dates print as `MM/DD/YYYY`.
 
 ## Body
 

@@ -19,6 +19,25 @@ export async function acceptOrderRequest(id: string) {
   return null;
 }
 
+export async function saveOrderHandling(
+  id: string,
+  terms: string,
+  shipmentMethodId: string,
+  salesRepId: string,
+) {
+  await requireRoles(["admin", "warehouse", "sales_rep"]);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_order_request_handling", {
+    p_request_id: id,
+    p_terms: terms,
+    p_shipment_method_id: shipmentMethodId || null,
+    p_sales_rep_id: salesRepId || null,
+  });
+  if (error) return error.message;
+  revalidate();
+  return null;
+}
+
 export async function saveStaffReply(id: string, reply: string) {
   await requireRoles(["admin", "warehouse", "sales_rep"]);
   const supabase = await createClient();

@@ -175,7 +175,7 @@ export async function saveCustomerOrderPdf(
   const rightFields: [string, string][] = [
     ["Status", orderStatusLabel(report.status)],
     ["Start date", displayDate(report.start_date)],
-    ["Cancel date", displayDate(report.cancel_date)],
+    ["Deliver by", displayDate(report.cancel_date)],
   ];
 
   const details: Body = (draw, x, top, w) => {

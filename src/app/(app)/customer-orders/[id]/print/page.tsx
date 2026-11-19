@@ -261,7 +261,7 @@ export default async function CustomerOrderPrintPage({
                     <div className="space-y-0.5">
                       <Field label="Status" value={orderStatusLabel(report.status)} />
                       <Field label="Start date" value={displayDate(report.start_date)} />
-                      <Field label="Cancel date" value={displayDate(report.cancel_date)} />
+                      <Field label="Deliver by" value={displayDate(report.cancel_date)} />
                     </div>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-x-6 border-t border-stone-200 pt-1.5 text-xs">

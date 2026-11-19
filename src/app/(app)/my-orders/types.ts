@@ -8,6 +8,8 @@ export type RequestOrder = {
   future_season: string | null;
   start_date: string | null;
   cancel_date: string | null;
+  terms: string | null;
+  shipping_method: string | null;
   notes: string | null;
   staff_reply: string | null;
   customer_acceptance: boolean | null;
@@ -20,10 +22,15 @@ export type RequestLine = {
   product_id: string;
   name: string;
   price: number;
+  qty: number | null;
+  type: number;
   sizes: MatrixSize[];
   drops: MatrixDrop[];
   cells: Cell[];
 };
+
+export type RequestCatalogChoice = { id: string; label: string; item_id: string | null };
+export type RequestSetItem = { id: string; name: string };
 
 export type RequestAddress = {
   id: string;

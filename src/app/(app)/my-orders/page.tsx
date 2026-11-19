@@ -3,7 +3,7 @@ import { requireRoles } from "@/lib/auth";
 import { asSeasonRows } from "@/lib/season";
 import type { Cell, MatrixDrop, MatrixSize } from "@/components/matrix/QtyMatrix";
 import { MyOrdersWorkspace } from "./MyOrdersWorkspace";
-import type { RequestLine, RequestOrder } from "./types";
+import type { RequestCatalogChoice, RequestLine, RequestOrder, RequestSetItem } from "./types";
 
 function one<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
@@ -64,7 +64,7 @@ export default async function MyOrdersPage({
     supabase
       .from("customer_order_requests")
       .select(
-        "id, request_no, status, created_at, future_season, start_date, cancel_date, notes, staff_reply, customer_acceptance, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country",
+        "id, request_no, status, created_at, future_season, start_date, cancel_date, terms, shipping_method, notes, staff_reply, customer_acceptance, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country",
       )
       .eq("customer_id", customerId)
       .order("request_no", { ascending: false }),
@@ -78,7 +78,7 @@ export default async function MyOrdersPage({
   const { data: lines } = ids.length
     ? await supabase
         .from("customer_order_request_products")
-        .select("request_id, product_id, price, products ( name )")
+        .select("request_id, product_id, price, qty, products ( name, type )")
         .in("request_id", ids)
     : { data: [] };
   const productIds = [...new Set((lines ?? []).map((line) => line.product_id))];
@@ -134,6 +134,8 @@ export default async function MyOrdersPage({
     future_season: row.future_season,
     start_date: row.start_date,
     cancel_date: row.cancel_date,
+    terms: row.terms,
+    shipping_method: row.shipping_method,
     notes: row.notes,
     staff_reply: row.staff_reply,
     customer_acceptance: row.customer_acceptance,
@@ -141,15 +143,40 @@ export default async function MyOrdersPage({
     bill: addressLines(row, "bill"),
   }));
   const requestLines: RequestLine[] = (lines ?? []).map((line) => {
-    const product = one<{ name: string | null }>(line.products as { name: string | null } | { name: string | null }[]);
+    const product = one<{ name: string | null; type: number | null }>(
+      line.products as { name: string | null; type: number | null } | { name: string | null; type: number | null }[],
+    );
     return {
       request_id: line.request_id,
       product_id: line.product_id,
       name: product?.name?.trim() || "Product",
       price: Number(line.price ?? 0),
+      qty: line.qty == null ? null : Number(line.qty),
+      type: product?.type ?? 1,
       sizes: sizesByProduct.get(line.product_id) ?? [],
       drops: dropsByProduct.get(line.product_id) ?? [],
       cells: cellsByLine.get(`${line.request_id}:${line.product_id}`) ?? [],
+    };
+  });
+  const [{ data: setItemRows }, { data: catalogRows }] = await Promise.all([
+    supabase.from("items").select("id, name").eq("in_set", true).order("name").limit(14),
+    supabase
+      .from("products")
+      .select("id, name, models ( name, item_id )")
+      .eq("type", 1)
+      .eq("is_active", true)
+      .eq("published", true)
+      .order("name"),
+  ]);
+  const setItems: RequestSetItem[] = (setItemRows ?? [])
+    .map((item) => ({ id: item.id, name: item.name?.trim() || "" }))
+    .filter((item) => item.name);
+  const catalog: RequestCatalogChoice[] = (catalogRows ?? []).map((product) => {
+    const model = one<{ name: string | null; item_id: string | null }>(product.models as never);
+    return {
+      id: product.id,
+      label: product.name?.trim() || model?.name?.trim() || "Product",
+      item_id: model?.item_id ?? null,
     };
   });
   const { open } = await searchParams;
@@ -158,6 +185,8 @@ export default async function MyOrdersPage({
     <MyOrdersWorkspace
       orders={orders}
       lines={requestLines}
+      setItems={setItems}
+      catalog={catalog}
       seasons={asSeasonRows(seasons ?? [])}
       addresses={(addresses ?? []).map((address) => ({
         id: address.id,

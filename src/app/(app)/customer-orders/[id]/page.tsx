@@ -101,7 +101,7 @@ export default async function CustomerOrderDetail({
               />
             </label>
             <label>
-              Cancel
+              Deliver by
               <input
                 name="cancel_date"
                 type="date"

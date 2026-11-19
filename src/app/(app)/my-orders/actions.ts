@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { SHIP_AT_ONCE } from "@/lib/customer-order";
+import { deliverByMessage, ONLINE_BY_CUSTOMER, SHIP_AT_ONCE } from "@/lib/customer-order";
 import { PRODUCT_TYPE } from "@/lib/product-type";
 import { parseCellFields } from "@/lib/products";
 
@@ -199,6 +199,8 @@ export async function createRequestFromCart(
   if (header.bill_address_id && (!bill || (bill.address_type !== "billing" && bill.address_type !== "both"))) {
     return "Bill-to must be a billing address.";
   }
+  const deliverBy = deliverByMessage(header.start_date, header.cancel_date);
+  if (deliverBy) return deliverBy;
   const { error } = await supabase.from("customer_order_requests").insert({
     customer_id: customerId,
     status: "draft",
@@ -206,6 +208,7 @@ export async function createRequestFromCart(
     start_date: header.start_date?.trim() || null,
     cancel_date: header.cancel_date?.trim() || null,
     notes: header.notes?.trim() || null,
+    transmission_method: ONLINE_BY_CUSTOMER,
     sales_rep_id: customer.sales_rep_id,
     created_by: userId,
     ...addressFields("ship", ship ?? null),
@@ -273,10 +276,14 @@ export async function saveRequestHeader(requestId: string, formData: FormData) {
   if (billId && (!bill || (bill.address_type !== "billing" && bill.address_type !== "both"))) {
     return "Bill-to must be a billing address.";
   }
+  const startDate = blank(formData.get("start_date"));
+  const deliverBy = blank(formData.get("cancel_date"));
+  const deliverByError = deliverByMessage(startDate, deliverBy);
+  if (deliverByError) return deliverByError;
   const patch: Record<string, unknown> = {
     future_season: futureSeason,
-    start_date: blank(formData.get("start_date")),
-    cancel_date: blank(formData.get("cancel_date")),
+    start_date: startDate,
+    cancel_date: deliverBy,
     notes: blank(formData.get("notes")),
   };
   if (formData.get("ship_set") === "1") Object.assign(patch, addressFields("ship", ship ?? null));
@@ -294,6 +301,16 @@ export async function saveRequestHeader(requestId: string, formData: FormData) {
 export async function submitRequest(requestId: string, customerAcceptance: boolean) {
   const { supabase, customerId } = await customerContext();
   if (!customerId) return "Your login is not linked to a customer.";
+  const { data: request } = await supabase
+    .from("customer_order_requests")
+    .select("start_date, cancel_date")
+    .eq("id", requestId)
+    .eq("customer_id", customerId)
+    .eq("status", "draft")
+    .maybeSingle();
+  if (!request) return "That order can no longer be changed.";
+  const deliverBy = deliverByMessage(request.start_date, request.cancel_date);
+  if (deliverBy) return deliverBy;
   const { error } = await supabase
     .from("customer_order_requests")
     .update({ status: "submitted", customer_acceptance: customerAcceptance })
@@ -332,42 +349,117 @@ export async function saveRequestQty(requestId: string, productId: string, formD
   if (!line || parent?.customer_id !== customerId || parent.status !== "draft") {
     return "That product is not on an open draft.";
   }
-  const [{ data: sizeRows }, { data: dropRows }, { data: ups }] = await Promise.all([
+  const [{ data: sizeRows }, { data: dropRows }, { data: ups }, { data: existing }] = await Promise.all([
     supabase.from("product_sizes").select("size_id").eq("product_id", productId),
     supabase.from("product_drops").select("drop_id").eq("product_id", productId),
     supabase
       .from("product_price_upcharges")
       .select("size_id, drop_id, upcharge_amount")
       .eq("product_id", productId),
+    supabase
+      .from("customer_order_request_cells")
+      .select("size_id, drop_id, price")
+      .eq("request_id", requestId)
+      .eq("product_id", productId),
   ]);
   const sizes = new Set((sizeRows ?? []).map((row) => row.size_id));
   const drops = new Set((dropRows ?? []).map((row) => row.drop_id));
-  const upcharge = new Map(
+  const catalogExtra = new Map(
     (ups ?? []).map((row) => [`${row.size_id}:${row.drop_id}`, Number(row.upcharge_amount ?? 0)]),
   );
-  const cells = parseCellFields(formData, "qty").filter(
-    (cell) => cell.qty > 0 && sizes.has(cell.size_id) && drops.has(cell.drop_id),
-  );
-  const { error: cleared } = await supabase
-    .from("customer_order_request_cells")
-    .delete()
-    .eq("request_id", requestId)
-    .eq("product_id", productId);
-  if (cleared) return cleared.message;
-  if (cells.length) {
-    const { error } = await supabase.from("customer_order_request_cells").insert(
-      cells.map((cell) => ({
+  const prev = new Map((existing ?? []).map((cell) => [`${cell.size_id}:${cell.drop_id}`, cell.price]));
+  const keep = [
+    ...new Set(
+      [...formData.keys()]
+        .filter((key) => key.startsWith("keepDrop:"))
+        .map((key) => key.slice("keepDrop:".length))
+        .filter((id) => drops.has(id)),
+    ),
+  ];
+  const keepSet = new Set(keep);
+  const rows = parseCellFields(formData, "ord")
+    .filter((cell) => keepSet.has(cell.drop_id) && sizes.has(cell.size_id))
+    .map((cell) => {
+      const key = `${cell.size_id}:${cell.drop_id}`;
+      const stored = prev.get(key);
+      const extra = stored !== undefined ? stored : catalogExtra.get(key) || null;
+      return {
         request_id: requestId,
         product_id: productId,
         size_id: cell.size_id,
         drop_id: cell.drop_id,
-        qty: cell.qty,
-        price: upcharge.get(`${cell.size_id}:${cell.drop_id}`) || null,
-      })),
-    );
+        qty: Math.max(0, Number(cell.qty) || 0),
+        price: extra == null || Number(extra) <= 0 ? null : Number(extra),
+      };
+    });
+  if (rows.length) {
+    const { error } = await supabase.from("customer_order_request_cells").upsert(rows, {
+      onConflict: "request_id,product_id,size_id,drop_id",
+    });
     if (error) return error.message;
   }
+  let removing = supabase
+    .from("customer_order_request_cells")
+    .delete()
+    .eq("request_id", requestId)
+    .eq("product_id", productId);
+  if (keep.length) removing = removing.not("drop_id", "in", `(${keep.map((id) => `"${id}"`).join(",")})`);
+  const { error: delError } = await removing;
+  if (delError) return delError.message;
   revalidatePath("/my-orders");
+  revalidatePath("/draft-orders");
+}
+
+export async function addRequestProduct(requestId: string, productId: string) {
+  const { supabase, customerId } = await customerContext();
+  if (!customerId) return "Your login is not linked to a customer.";
+  if (!requestId) return "Open an order first.";
+  if (!productId) return "Pick a product.";
+  const { data: request } = await supabase
+    .from("customer_order_requests")
+    .select("id")
+    .eq("id", requestId)
+    .eq("customer_id", customerId)
+    .eq("status", "draft")
+    .maybeSingle();
+  if (!request) return "That order can no longer be changed.";
+  const { data: product } = await supabase
+    .from("products")
+    .select("id, type, is_active, published, standard_price")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!product || product.type !== PRODUCT_TYPE.merchandise || product.is_active === false || product.published === false) {
+    return "Pick a product from the shop.";
+  }
+  const price = Number(product.standard_price ?? 0);
+  const { error } = await supabase.from("customer_order_request_products").insert({
+    request_id: requestId,
+    product_id: productId,
+    price,
+    qty: null,
+  });
+  if (error) return error.code === "23505" ? "That product is already on the order." : error.message;
+  const { data: ups } = await supabase
+    .from("product_price_upcharges")
+    .select("size_id, drop_id, upcharge_amount")
+    .eq("product_id", productId);
+  const cells = (ups ?? [])
+    .filter((row) => Number(row.upcharge_amount) > 0)
+    .map((row) => ({
+      request_id: requestId,
+      product_id: productId,
+      size_id: row.size_id,
+      drop_id: row.drop_id,
+      qty: 0,
+      price: Number(row.upcharge_amount),
+    }));
+  if (cells.length) {
+    const { error: cellError } = await supabase.from("customer_order_request_cells").insert(cells);
+    if (cellError) return cellError.message;
+  }
+  revalidatePath("/my-orders");
+  revalidatePath("/draft-orders");
+  return null;
 }
 
 export async function removeRequestProduct(requestId: string, productId: string) {
@@ -380,4 +472,5 @@ export async function removeRequestProduct(requestId: string, productId: string)
     .eq("product_id", productId);
   if (error) return error.message;
   revalidatePath("/my-orders");
+  revalidatePath("/draft-orders");
 }

@@ -9,7 +9,8 @@ import { FilterClear } from "@/components/filter/FilterClear";
 import { SHIP_AT_ONCE } from "@/lib/customer-order";
 import { DraftOrdersTable } from "./DraftOrdersTable";
 import { DraftOrderPanel } from "./DraftOrderPanel";
-import type { DraftOrderLine, DraftOrderRow } from "./types";
+import type { CatalogChoice, ChargeChoice, SetItem } from "../customer-orders/OrderProductsPanel";
+import type { DraftChoice, DraftMethod, DraftOrderLine, DraftOrderRow } from "./types";
 
 type Filters = {
   orderNo: string;
@@ -35,10 +36,22 @@ export function DraftOrdersWorkspace({
   rows,
   lines,
   canAct,
+  setItems,
+  catalog,
+  charges,
+  terms,
+  shipmentMethods,
+  salesReps,
 }: {
   rows: DraftOrderRow[];
   lines: DraftOrderLine[];
   canAct: boolean;
+  setItems: SetItem[];
+  catalog: CatalogChoice[];
+  charges: ChargeChoice[];
+  terms: DraftChoice[];
+  shipmentMethods: DraftMethod[];
+  salesReps: DraftChoice[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -120,6 +133,9 @@ export function DraftOrdersWorkspace({
           canAct={canAct}
           focusId={focusId}
           focusNonce={focusNonce}
+          terms={terms}
+          shipmentMethods={shipmentMethods}
+          salesReps={salesReps}
           onOpen={setOpenId}
         />
       </FitPage>
@@ -187,7 +203,15 @@ export function DraftOrdersWorkspace({
           </FilterClear>
         </label>
       </DockedFilterPanel>
-      <DraftOrderPanel open={openId != null} onClose={() => setOpenId(null)} order={openRow} lines={lines} />
+      <DraftOrderPanel
+        open={openId != null}
+        onClose={() => setOpenId(null)}
+        order={openRow}
+        lines={lines}
+        setItems={setItems}
+        catalog={catalog}
+        charges={charges}
+      />
     </>
   );
 }

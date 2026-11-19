@@ -462,11 +462,11 @@ export function OrderHeaderCard({
               </FieldClear>
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs text-stone-500">Cancel</span>
+              <span className="mb-1 block text-xs text-stone-500">Deliver by</span>
               <FieldClear onClear={() => setCancelDate("")} className="right-8">
                 <input
                   type="date"
-                  aria-label="Cancel"
+                  aria-label="Deliver by"
                   title="Latest date the order can be delivered"
                   className="w-full rounded border py-1 pl-2 pr-14"
                   value={cancelDate}
