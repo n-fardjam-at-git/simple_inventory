@@ -78,7 +78,7 @@ export default async function MyOrdersPage({
   const { data: lines } = ids.length
     ? await supabase
         .from("customer_order_request_products")
-        .select("request_id, product_id, price, qty, products ( name, type )")
+        .select("request_id, product_id, price, qty, products ( name, type, models ( items ( name ) ) )")
         .in("request_id", ids)
     : { data: [] };
   const productIds = [...new Set((lines ?? []).map((line) => line.product_id))];
@@ -143,13 +143,18 @@ export default async function MyOrdersPage({
     bill: addressLines(row, "bill"),
   }));
   const requestLines: RequestLine[] = (lines ?? []).map((line) => {
-    const product = one<{ name: string | null; type: number | null }>(
-      line.products as { name: string | null; type: number | null } | { name: string | null; type: number | null }[],
-    );
+    const product = one<{
+      name: string | null;
+      type: number | null;
+      models: { items: { name: string | null } | { name: string | null }[] | null } | null;
+    }>(line.products as never);
+    const model = one(product?.models ?? null);
+    const item = one(model?.items ?? null);
     return {
       request_id: line.request_id,
       product_id: line.product_id,
       name: product?.name?.trim() || "Product",
+      item: item?.name?.trim() || null,
       price: Number(line.price ?? 0),
       qty: line.qty == null ? null : Number(line.qty),
       type: product?.type ?? 1,

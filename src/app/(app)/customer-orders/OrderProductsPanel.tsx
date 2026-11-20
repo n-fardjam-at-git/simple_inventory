@@ -104,7 +104,7 @@ const defaultWrites: OrderProductWrites = {
 };
 
 const WritesContext = createContext<OrderProductWrites>(defaultWrites);
-const PanelModeContext = createContext({ showLifecycle: true, readOnly: false });
+const PanelModeContext = createContext({ showLifecycle: true, readOnly: false, showInventory: true });
 
 function useWrites() {
   return useContext(WritesContext);
@@ -160,6 +160,7 @@ export function OrderProductsPanel({
   writes = defaultWrites,
   showLifecycle = true,
   readOnly = false,
+  showInventory = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -177,6 +178,8 @@ export function OrderProductsPanel({
   showLifecycle?: boolean;
   /** Accepted proposals stay view-only. */
   readOnly?: boolean;
+  /** On-hand window. A customer's own order leaves this off. */
+  showInventory?: boolean;
 }) {
   const [pickItemId, setPickItemId] = useState<string | null>(null);
   const [copyProductId, setCopyProductId] = useState<string | null>(null);
@@ -215,7 +218,7 @@ export function OrderProductsPanel({
 
   return (
     <WritesContext.Provider value={writes}>
-    <PanelModeContext.Provider value={{ showLifecycle, readOnly }}>
+    <PanelModeContext.Provider value={{ showLifecycle, readOnly, showInventory }}>
     <>
     <DockedPanel
       open={open}
@@ -834,7 +837,7 @@ function ProductLineRow({
   const router = useRouter();
   const refreshRow = useRefreshRow(row);
   const writes = useWrites();
-  const { showLifecycle, readOnly } = usePanelMode();
+  const { showLifecycle, readOnly, showInventory } = usePanelMode();
   const id = `${row.customer_order_id}:${row.product_id}`;
   const dirty = (showLifecycle && status !== row.status) || matrixDirty;
   const [invOpen, setInvOpen] = useState(false);
@@ -1037,6 +1040,7 @@ function ProductLineRow({
         <div className="flex h-full flex-col justify-between gap-1 pt-1">
           <div className="min-w-36">
           {readOnly ? (
+            showInventory ? (
             <button
               ref={invBtn}
               type="button"
@@ -1045,6 +1049,7 @@ function ProductLineRow({
             >
               Inventory
             </button>
+            ) : null
           ) : (
           <RowButtons
             editing={editing}

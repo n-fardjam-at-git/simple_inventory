@@ -8,12 +8,63 @@ import { ComboBox } from "@/components/ComboBox";
 import { DismissNote } from "@/components/DismissNote";
 import { WorkingBeside } from "@/components/WorkingBeside";
 import { FitList } from "@/components/list/FitList";
-import { SelectableRow, useList } from "@/components/list/ListTable";
+import { RowButtons, SelectableRow, useList } from "@/components/list/ListTable";
 import { SysFolder, SysFolderOpen } from "@/components/icons/SysImages";
 import { summarizeOrder } from "@/lib/order-summary";
+import { customerPickLabel } from "@/lib/customer";
 import { LINE_PRICE_NOTICE, staffReplyText } from "@/lib/customer-order";
-import { acceptOrderRequest, returnOrderRequest, saveOrderHandling, saveStaffReply } from "./actions";
-import type { DraftChoice, DraftMethod, DraftOrderLine, DraftOrderRow } from "./types";
+import { matchAddress } from "../customer-orders/CustomerOrdersTable";
+import {
+  OrderHeaderCard,
+  type OrderAddress,
+  type OrderHeaderInitial,
+} from "../customer-orders/NewOrderForm";
+import {
+  acceptOrderRequest,
+  deleteProposal,
+  returnOrderRequest,
+  saveOrderHandling,
+  saveProposalHeader,
+  saveStaffReply,
+  submitProposal,
+} from "./actions";
+import type { DraftChoice, DraftMethod, DraftOrderLine, DraftOrderRow, ProposalChoices } from "./types";
+
+function proposalInitial(order: DraftOrderRow, addresses: OrderAddress[]): OrderHeaderInitial {
+  return {
+    customerId: order.customer_id,
+    customerLabel: customerPickLabel({
+      account_no: order.account_no ?? 0,
+      company_name: order.customer,
+      account_number: order.account,
+    }),
+    shipId: matchAddress(
+      addresses,
+      order.customer_id,
+      ["shipping", "both"],
+      order.ship_line1,
+      order.ship_city,
+    ),
+    billId: matchAddress(
+      addresses,
+      order.customer_id,
+      ["billing", "both"],
+      order.bill_line1,
+      order.bill_city,
+    ),
+    startDate: order.start_date ?? "",
+    cancelDate: order.cancel_date ?? "",
+    futureSeason: order.future_season ?? "",
+    shipmentMethodId: order.shipment_method_id ?? "",
+    shipmentLabel: order.shipping_method ?? "",
+    transmissionMethodId: "",
+    transmissionLabel: "",
+    notes: order.notes ?? "",
+    terms: order.terms ?? "",
+    poNo: "",
+    poLocked: false,
+  };
+}
 
 const STATUS: Record<string, string> = {
   draft: "Draft",
@@ -27,6 +78,7 @@ export function DraftOrdersTable({
   rows,
   lines,
   canAct,
+  choices,
   focusId = null,
   focusNonce = 0,
   terms,
@@ -37,6 +89,7 @@ export function DraftOrdersTable({
   rows: DraftOrderRow[];
   lines: DraftOrderLine[];
   canAct: boolean;
+  choices: ProposalChoices | null;
   focusId?: string | null;
   focusNonce?: number;
   terms: DraftChoice[];
@@ -84,6 +137,7 @@ export function DraftOrdersTable({
         order={selected}
         lines={selected ? lines.filter((line) => line.request_id === selected.id) : []}
         canAct={canAct}
+        choices={choices}
         terms={terms}
         shipmentMethods={shipmentMethods}
         salesReps={salesReps}
@@ -107,6 +161,7 @@ function DraftDetails({
   order,
   lines,
   canAct,
+  choices,
   terms,
   shipmentMethods,
   salesReps,
@@ -115,6 +170,7 @@ function DraftDetails({
   order: DraftOrderRow | null;
   lines: DraftOrderLine[];
   canAct: boolean;
+  choices: ProposalChoices | null;
   terms: DraftChoice[];
   shipmentMethods: DraftMethod[];
   salesReps: DraftChoice[];
@@ -122,19 +178,43 @@ function DraftDetails({
 }) {
   const router = useRouter();
   const [, start] = useTransition();
-  const [ask, setAsk] = useState<null | "accept" | "return">(null);
+  const [ask, setAsk] = useState<null | "accept" | "return" | "submit">(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const submitted = order?.status === "submitted";
+  const repDraft = choices != null && order != null && order.status === "draft";
+  const canSubmit = repDraft && order != null && !order.customer_has_login;
+  const canEdit = repDraft && order != null && order.rep_entered;
 
   useEffect(() => {
     setAsk(null);
     setErr(null);
+    setEditing(false);
   }, [order?.id]);
+
+  function remove() {
+    if (!order || deleting) return;
+    if (!confirm(`Delete order ${order.request_no}?`)) return;
+    const id = order.id;
+    setErr(null);
+    setDeleting(true);
+    start(async () => {
+      try {
+        const message = await deleteProposal(id);
+        if (message) setErr(message);
+        else router.refresh();
+      } finally {
+        setDeleting(false);
+      }
+    });
+  }
 
   function run() {
     if (!order || !ask || busy) return;
-    const action = ask === "accept" ? acceptOrderRequest : returnOrderRequest;
+    const action =
+      ask === "accept" ? acceptOrderRequest : ask === "return" ? returnOrderRequest : submitProposal;
     setErr(null);
     setBusy(true);
     start(async () => {
@@ -193,6 +273,33 @@ function DraftDetails({
                   </button>
                 </>
               ) : null}
+              {canSubmit ? (
+                <button
+                  type="button"
+                  className="rounded border border-stone-300 px-2 py-1 text-xs hover:bg-stone-100 disabled:opacity-40"
+                  title="This customer has no login"
+                  disabled={busy || deleting}
+                  onClick={() => setAsk("submit")}
+                >
+                  Submit
+                </button>
+              ) : null}
+              {canEdit ? (
+                <>
+                  <span className="mx-0.5 h-6 w-px shrink-0 bg-stone-300" aria-hidden />
+                  <div className="[&>div]:flex-nowrap">
+                    <RowButtons
+                      editing={false}
+                      dirty={false}
+                      deleting={deleting}
+                      onEdit={() => setEditing(true)}
+                      onSave={() => {}}
+                      onCancel={() => {}}
+                      onDelete={remove}
+                    />
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
           {err && !ask ? (
@@ -243,7 +350,9 @@ function DraftDetails({
                   <p className="font-medium">
                     {ask === "accept"
                       ? `Accept order ${order.request_no}?`
-                      : `Return order ${order.request_no}?`}
+                      : ask === "return"
+                        ? `Return order ${order.request_no}?`
+                        : `Submit order ${order.request_no}?`}
                   </p>
                   <button
                     type="button"
@@ -257,7 +366,11 @@ function DraftDetails({
                 <p className="mb-4 text-sm text-stone-600">
                   {ask === "accept"
                     ? "This copies the proposal into a pending customer order."
-                    : "The customer can edit this proposal again."}
+                    : ask === "return"
+                      ? order.customer_has_login
+                        ? "The customer can edit this proposal again."
+                        : "The sales rep can edit this proposal again."
+                      : "This customer has no login. Submitting records that the customer accepted these prices and terms."}
                 </p>
                 {err ? (
                   <DismissNote className="mb-3 text-xs text-red-700" onDismiss={() => setErr(null)}>
@@ -273,7 +386,7 @@ function DraftDetails({
                       disabled={busy}
                       onClick={run}
                     >
-                      {ask === "accept" ? "Accept" : "Return"}
+                      {ask === "accept" ? "Accept" : ask === "return" ? "Return" : "Submit"}
                     </button>
                   </span>
                   <button
@@ -290,6 +403,29 @@ function DraftDetails({
             document.body,
           )
         : null}
+      {editing && order && choices && canEdit ? (
+        <OrderHeaderCard
+          key={order.id}
+          title={`PO No ${order.request_no}`}
+          proposal
+          customerLocked
+          initial={proposalInitial(order, choices.addresses)}
+          shipSnapshot={order.ship.length > 0}
+          billSnapshot={order.bill.length > 0}
+          terms={choices.terms}
+          customers={choices.customers}
+          addresses={choices.addresses}
+          shipmentMethods={choices.shipmentMethods}
+          transmissionMethods={[]}
+          seasons={choices.seasons}
+          onClose={() => setEditing(false)}
+          onSave={async (formData) => {
+            const message = await saveProposalHeader(order.id, formData);
+            if (message) return message;
+            router.refresh();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

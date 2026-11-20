@@ -31,7 +31,7 @@ export default async function CustomerOrderDetail({
 }) {
   const { id } = await params;
   const { error } = await searchParams;
-  await requireRoles(["admin", "warehouse", "sales_rep"]);
+  const profile = await requireRoles(["admin", "warehouse", "sales_rep"]);
   const supabase = await createClient();
   const { data: order } = await supabase
     .from("customer_orders")
@@ -68,12 +68,15 @@ export default async function CustomerOrderDetail({
     .select("season")
     .order("year", { ascending: false });
 
+  const poLocked = Boolean(order.request_id);
+  const poNo = (order.po_no as string | null) ?? "";
+
   const customer = order.customers as unknown as {
     account_no: number;
     company_name: string;
     account_number: string | null;
   } | null;
-  const workflow = WORKFLOW_STATUS.includes(order.status);
+  const workflow = WORKFLOW_STATUS.includes(order.status) && profile.role !== "sales_rep";
   const onOrder = new Set((lines ?? []).map((line) => line.product_id));
 
   return (
@@ -109,6 +112,18 @@ export default async function CustomerOrderDetail({
                 defaultValue={order.cancel_date ?? ""}
                 className="ml-2 rounded border px-2 py-1"
               />
+            </label>
+            <label>
+              PO No
+              {poLocked ? (
+                <span className="ml-2">{poNo || "—"}</span>
+              ) : (
+                <input
+                  name="po_no"
+                  defaultValue={poNo}
+                  className="ml-2 rounded border px-2 py-1"
+                />
+              )}
             </label>
             <label>
               Season

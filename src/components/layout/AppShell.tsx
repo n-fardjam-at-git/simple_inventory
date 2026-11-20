@@ -8,6 +8,7 @@ const LINKS: { href: string; label: string; roles: Role[] }[] = [
   { href: "/alerts", label: "Alerts", roles: ["admin", "warehouse", "sales_rep"] },
   { href: "/shop", label: "Shop", roles: ["customer"] },
   { href: "/my-orders", label: "My orders", roles: ["customer"] },
+  { href: "/orders", label: "Orders", roles: ["customer"] },
   { href: "/cutting-orders", label: "Cutting orders", roles: ["admin", "warehouse"] },
   { href: "/vendor-shipments", label: "Vendor shipments", roles: ["admin", "warehouse"] },
   { href: "/vendor-cuttings", label: "Cutting orders", roles: ["vendor"] },

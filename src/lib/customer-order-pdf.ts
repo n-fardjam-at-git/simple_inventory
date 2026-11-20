@@ -168,6 +168,7 @@ export async function saveCustomerOrderPdf(
   // ---- Order details -----------------------------------------------------
   const leftFields: [string, string][] = [
     ["Customer", report.customer],
+    ["PO No", report.po_no ?? ""],
     ["Terms", report.terms ?? ""],
     ["Shipping method", report.shipping_method ?? ""],
     ["Season", report.future_season ?? ""],

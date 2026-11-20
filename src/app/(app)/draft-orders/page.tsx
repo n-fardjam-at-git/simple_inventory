@@ -3,8 +3,9 @@ import { requireRoles } from "@/lib/auth";
 import type { Cell, MatrixDrop, MatrixSize } from "@/components/matrix/QtyMatrix";
 import { PRODUCT_TYPE } from "@/lib/product-type";
 import { DraftOrdersWorkspace } from "./DraftOrdersWorkspace";
-import { shipmentMethodLabel } from "@/lib/customer-order";
-import type { DraftChoice, DraftMethod, DraftOrderLine, DraftOrderRow } from "./types";
+import { ONLINE_BY_SALES_REP, shipmentMethodLabel } from "@/lib/customer-order";
+import { asSeasonRows } from "@/lib/season";
+import type { DraftChoice, DraftMethod, DraftOrderLine, DraftOrderRow, ProposalChoices } from "./types";
 
 function one<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
@@ -34,7 +35,7 @@ export default async function DraftOrdersPage() {
   const { data: requests } = await supabase
     .from("customer_order_requests")
     .select(
-      "id, request_no, customer_id, status, created_at, future_season, start_date, cancel_date, terms, shipment_method_id, shipping_method, sales_rep_id, notes, staff_reply, customer_acceptance, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country, customers ( company_name, account_no, account_number )",
+      "id, request_no, customer_id, status, created_at, future_season, start_date, cancel_date, terms, shipment_method_id, shipping_method, transmission_method, sales_rep_id, notes, staff_reply, customer_acceptance, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country, customers ( company_name, account_no, account_number, user_id )",
     )
     .order("request_no", { ascending: false });
 
@@ -132,11 +133,20 @@ export default async function DraftOrdersPage() {
     ...(extraReps ?? []).map((rep) => [rep.id, rep.display_name?.trim() || "Sales rep"] as const),
   ]);
 
+  const isRep = profile.role === "sales_rep";
+  const { data: loginRows } = await supabase
+    .from("profiles")
+    .select("customer_id")
+    .eq("role", "customer")
+    .not("customer_id", "is", null);
+  const withLogin = new Set((loginRows ?? []).map((row) => row.customer_id));
+
   const rows: DraftOrderRow[] = (requests ?? []).map((row) => {
     const customer = one<{
       company_name: string | null;
       account_no: number | null;
       account_number: string | null;
+      user_id: string | null;
     }>(row.customers as never);
     const fields = row as unknown as Record<string, string | null>;
     return {
@@ -161,6 +171,12 @@ export default async function DraftOrdersPage() {
       status: row.status,
       ship: addressLines(fields, "ship"),
       bill: addressLines(fields, "bill"),
+      ship_line1: row.ship_address_line1,
+      ship_city: row.ship_city,
+      bill_line1: row.bill_address_line1,
+      bill_city: row.bill_city,
+      rep_entered: row.transmission_method === ONLINE_BY_SALES_REP,
+      customer_has_login: Boolean(customer?.user_id) || withLogin.has(row.customer_id),
     };
   });
   const orderLines: DraftOrderLine[] = (lines ?? []).map((line) => {
@@ -220,9 +236,40 @@ export default async function DraftOrdersPage() {
       .eq("is_active", true)
       .order("type")
       .order("name"),
-    supabase.from("payment_terms").select("term").order("term"),
+    supabase.from("payment_terms").select("term, days_due").order("term"),
     supabase.from("shipment_methods").select("id, shipper, method, is_active").order("sort_order"),
   ]);
+
+  let choices: ProposalChoices | null = null;
+  if (isRep) {
+    const [{ data: customerRows }, { data: addressRows }, { data: seasonRows }] = await Promise.all([
+      supabase
+        .from("customers")
+        .select("id, account_no, company_name, account_number, payment_terms ( term )")
+        .eq("is_active", true)
+        .eq("sales_rep_id", profile.id)
+        .order("company_name"),
+      supabase
+        .from("customer_addresses")
+        .select("id, customer_id, address_type, location_name, city, address_line1"),
+      supabase.from("seasons").select("id, year, start_season, is_combo, season"),
+    ]);
+    choices = {
+      customers: (customerRows ?? []).map((customer) => ({
+        id: customer.id,
+        account_no: customer.account_no,
+        company_name: customer.company_name,
+        account_number: customer.account_number,
+        term: one<{ term: string }>(customer.payment_terms as never)?.term ?? null,
+      })),
+      addresses: addressRows ?? [],
+      shipmentMethods: (methodRows ?? [])
+        .filter((method) => method.is_active)
+        .map((method) => ({ id: method.id, shipper: method.shipper, method: method.method })),
+      seasons: asSeasonRows(seasonRows ?? []),
+      terms: (termRows ?? []).map((term) => ({ term: term.term, days_due: term.days_due })),
+    };
+  }
   const terms: DraftChoice[] = (termRows ?? []).map((term) => ({ id: term.term, label: term.term }));
   const shipmentMethods: DraftMethod[] = (methodRows ?? []).map((method) => ({
     id: method.id,
@@ -235,6 +282,7 @@ export default async function DraftOrdersPage() {
       rows={rows}
       lines={orderLines}
       canAct={profile.role === "admin" || profile.role === "warehouse"}
+      choices={choices}
       setItems={setItemRows ?? []}
       catalog={(catalogRows ?? []).map((product) => {
         const model = one<{ name: string | null; item_id: string | null }>(product.models as never);

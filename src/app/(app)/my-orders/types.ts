@@ -21,6 +21,7 @@ export type RequestLine = {
   request_id: string;
   product_id: string;
   name: string;
+  item: string | null;
   price: number;
   qty: number | null;
   type: number;

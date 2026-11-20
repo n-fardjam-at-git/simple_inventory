@@ -212,6 +212,7 @@ export function ShopPreview({
       shipping_method: null,
       transmission_method: null,
       future_season: null,
+      po_no: null,
       start_date: null,
       cancel_date: null,
       created_at: null,

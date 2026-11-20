@@ -50,11 +50,13 @@ export type OrderHeaderInitial = {
   transmissionLabel: string;
   notes: string;
   terms: string;
+  poNo: string;
+  poLocked: boolean;
 };
 
 const inputClass = "w-full rounded border py-1 pl-2 pr-6";
 
-const BLANK: OrderHeaderInitial = {
+export const BLANK_ORDER_HEADER: OrderHeaderInitial = {
   customerId: "",
   customerLabel: "",
   shipId: "",
@@ -68,6 +70,8 @@ const BLANK: OrderHeaderInitial = {
   transmissionLabel: "",
   notes: "",
   terms: "",
+  poNo: "",
+  poLocked: false,
 };
 
 function todayIso() {
@@ -110,7 +114,7 @@ export function NewOrderForm({
       {open ? (
         <OrderHeaderCard
           title="New order"
-          initial={BLANK}
+          initial={BLANK_ORDER_HEADER}
           shipSnapshot={false}
           billSnapshot={false}
           terms={terms}
@@ -142,6 +146,8 @@ export function OrderHeaderCard({
   shipmentMethods,
   transmissionMethods,
   seasons,
+  proposal = false,
+  customerLocked = false,
   onClose,
   onSave,
 }: {
@@ -155,6 +161,9 @@ export function OrderHeaderCard({
   shipmentMethods: OrderShipmentMethod[];
   transmissionMethods: OrderTransmissionMethod[];
   seasons: OrderSeason[];
+  /** A sales-rep proposal: Received via and PO No are set for it, so they stay off the card. */
+  proposal?: boolean;
+  customerLocked?: boolean;
   onClose: () => void;
   onSave: (formData: FormData) => Promise<string | void>;
 }) {
@@ -168,6 +177,7 @@ export function OrderHeaderCard({
   const [transmissionMethodId, setTransmissionMethodId] = useState(initial.transmissionMethodId);
   const [notes, setNotes] = useState(initial.notes);
   const [terms, setTerms] = useState(initial.terms);
+  const [poNo, setPoNo] = useState(initial.poNo);
   const [shipTouched, setShipTouched] = useState(false);
   const [billTouched, setBillTouched] = useState(false);
   const [methodTouched, setMethodTouched] = useState(false);
@@ -219,7 +229,8 @@ export function OrderHeaderCard({
     shipmentMethodId !== initial.shipmentMethodId ||
     transmissionMethodId !== initial.transmissionMethodId ||
     notes !== initial.notes ||
-    terms !== initial.terms;
+    terms !== initial.terms ||
+    (!initial.poLocked && poNo !== initial.poNo);
 
   function close() {
     if (saving) return;
@@ -258,6 +269,7 @@ export function OrderHeaderCard({
     );
     formData.set("notes", notes);
     formData.set("terms", terms);
+    formData.set("po_no", initial.poLocked ? initial.poNo : poNo);
     start(async () => {
       const message = await onSave(formData);
       if (typeof message === "string" && message) {
@@ -291,20 +303,27 @@ export function OrderHeaderCard({
           </button>
         </div>
         <div className="space-y-3 text-sm">
-          <label className="block">
-            <span className="mb-1 block text-xs text-stone-500">Customer</span>
-            <FieldClear onClear={() => pickCustomer("")}>
-              <ComboBox
-                allowEmpty
-                placeholder="Customer"
-                aria-label="Customer"
-                className={inputClass}
-                value={customerId}
-                onChange={pickCustomer}
-                options={customerOptions}
-              />
-            </FieldClear>
-          </label>
+          {customerLocked ? (
+            <div>
+              <span className="mb-1 block text-xs text-stone-500">Customer</span>
+              <p className="py-1 text-sm text-stone-900">{initial.customerLabel || "—"}</p>
+            </div>
+          ) : (
+            <label className="block">
+              <span className="mb-1 block text-xs text-stone-500">Customer</span>
+              <FieldClear onClear={() => pickCustomer("")}>
+                <ComboBox
+                  allowEmpty
+                  placeholder="Customer"
+                  aria-label="Customer"
+                  className={inputClass}
+                  value={customerId}
+                  onChange={pickCustomer}
+                  options={customerOptions}
+                />
+              </FieldClear>
+            </label>
+          )}
           <label className="block">
             <span className="mb-1 block text-xs text-stone-500">Bill-to</span>
             <FieldClear
@@ -392,28 +411,49 @@ export function OrderHeaderCard({
               />
             </FieldClear>
           </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-stone-500">Received via</span>
-            <FieldClear
-              onClear={() => {
-                setTransmissionMethodId("");
-                setReceivedTouched(true);
-              }}
-            >
-              <ComboBox
-                allowEmpty
-                placeholder="Received via"
-                aria-label="Received via"
-                className={inputClass}
-                value={transmissionMethodId}
-                onChange={(id) => {
-                  setTransmissionMethodId(id);
-                  setReceivedTouched(true);
-                }}
-                options={receivedOptions}
-              />
-            </FieldClear>
-          </label>
+          {proposal ? null : (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-xs text-stone-500">Received via</span>
+                <FieldClear
+                  onClear={() => {
+                    setTransmissionMethodId("");
+                    setReceivedTouched(true);
+                  }}
+                >
+                  <ComboBox
+                    allowEmpty
+                    placeholder="Received via"
+                    aria-label="Received via"
+                    className={inputClass}
+                    value={transmissionMethodId}
+                    onChange={(id) => {
+                      setTransmissionMethodId(id);
+                      setReceivedTouched(true);
+                    }}
+                    options={receivedOptions}
+                  />
+                </FieldClear>
+              </label>
+              <div>
+                <span className="mb-1 block text-xs text-stone-500">PO No</span>
+                {initial.poLocked ? (
+                  <p className="py-1 text-sm text-stone-900" title="Copied from the proposal">
+                    {poNo || "—"}
+                  </p>
+                ) : (
+                  <FieldClear onClear={() => setPoNo("")}>
+                    <input
+                      aria-label="PO No"
+                      className={inputClass}
+                      value={poNo}
+                      onChange={(e) => setPoNo(e.target.value)}
+                    />
+                  </FieldClear>
+                )}
+              </div>
+            </>
+          )}
           <div>
             <span className="mb-1 block text-xs text-stone-500">Season</span>
             <label className="inline-flex items-center gap-1.5">

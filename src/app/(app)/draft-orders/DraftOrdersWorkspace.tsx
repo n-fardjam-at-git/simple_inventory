@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { PageTitle } from "@/components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Btn, PageTitle } from "@/components/ui";
 import { FitPage } from "@/components/list/FitList";
 import { ComboBox } from "@/components/ComboBox";
 import { DockedFilterPanel, filterToggleClass } from "@/components/filter/DockedFilterPanel";
@@ -9,8 +10,10 @@ import { FilterClear } from "@/components/filter/FilterClear";
 import { SHIP_AT_ONCE } from "@/lib/customer-order";
 import { DraftOrdersTable } from "./DraftOrdersTable";
 import { DraftOrderPanel } from "./DraftOrderPanel";
+import { createProposal } from "./actions";
+import { BLANK_ORDER_HEADER, OrderHeaderCard } from "../customer-orders/NewOrderForm";
 import type { CatalogChoice, ChargeChoice, SetItem } from "../customer-orders/OrderProductsPanel";
-import type { DraftChoice, DraftMethod, DraftOrderLine, DraftOrderRow } from "./types";
+import type { DraftChoice, DraftMethod, DraftOrderLine, DraftOrderRow, ProposalChoices } from "./types";
 
 type Filters = {
   orderNo: string;
@@ -36,6 +39,7 @@ export function DraftOrdersWorkspace({
   rows,
   lines,
   canAct,
+  choices,
   setItems,
   catalog,
   charges,
@@ -46,6 +50,7 @@ export function DraftOrdersWorkspace({
   rows: DraftOrderRow[];
   lines: DraftOrderLine[];
   canAct: boolean;
+  choices: ProposalChoices | null;
   setItems: SetItem[];
   catalog: CatalogChoice[];
   charges: ChargeChoice[];
@@ -53,6 +58,7 @@ export function DraftOrdersWorkspace({
   shipmentMethods: DraftMethod[];
   salesReps: DraftChoice[];
 }) {
+  const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [draft, setDraft] = useState<Filters>(EMPTY);
@@ -60,6 +66,8 @@ export function DraftOrdersWorkspace({
   const [comboKey, setComboKey] = useState(0);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
+  const [adding, setAdding] = useState(false);
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const openRow = rows.find((row) => row.id === openId) ?? null;
   const orderNoEntered = Boolean(draft.orderNo.trim());
 
@@ -73,6 +81,16 @@ export function DraftOrdersWorkspace({
       return true;
     });
   }, [rows, applied]);
+
+  // Select the new proposal once the refreshed list has it.
+  useEffect(() => {
+    if (!createdId || !rows.some((row) => row.id === createdId)) return;
+    if (filtered.some((row) => row.id === createdId)) {
+      setFocusId(createdId);
+      setFocusNonce((nonce) => nonce + 1);
+    }
+    setCreatedId(null);
+  }, [createdId, rows, filtered]);
 
   const customers = useMemo(() => {
     const seen = new Set<string>();
@@ -127,10 +145,18 @@ export function DraftOrdersWorkspace({
             </button>
           }
         />
+        {choices ? (
+          <div className="shrink-0">
+            <Btn type="button" onClick={() => setAdding(true)}>
+              Add proposal
+            </Btn>
+          </div>
+        ) : null}
         <DraftOrdersTable
           rows={filtered}
           lines={lines}
           canAct={canAct}
+          choices={choices}
           focusId={focusId}
           focusNonce={focusNonce}
           terms={terms}
@@ -203,6 +229,28 @@ export function DraftOrdersWorkspace({
           </FilterClear>
         </label>
       </DockedFilterPanel>
+      {adding && choices ? (
+        <OrderHeaderCard
+          title="New proposal"
+          proposal
+          initial={BLANK_ORDER_HEADER}
+          shipSnapshot={false}
+          billSnapshot={false}
+          terms={choices.terms}
+          customers={choices.customers}
+          addresses={choices.addresses}
+          shipmentMethods={choices.shipmentMethods}
+          transmissionMethods={[]}
+          seasons={choices.seasons}
+          onClose={() => setAdding(false)}
+          onSave={async (formData) => {
+            const result = await createProposal(formData);
+            if (result.error || !result.id) return result.error || "Could not start the proposal.";
+            setCreatedId(result.id);
+            router.refresh();
+          }}
+        />
+      ) : null}
       <DraftOrderPanel
         open={openId != null}
         onClose={() => setOpenId(null)}

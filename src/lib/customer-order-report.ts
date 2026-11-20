@@ -60,6 +60,7 @@ export type CustomerOrderReport = {
   shipping_method: string | null;
   transmission_method: string | null;
   future_season: string | null;
+  po_no: string | null;
   start_date: string | null;
   cancel_date: string | null;
   created_at: string | null;
@@ -279,6 +280,7 @@ export async function loadCustomerOrderReport(
     transmission_method:
       (order.transmission_method as string | null)?.trim() || transmissionMethod?.name || null,
     future_season: (order.future_season as string | null)?.trim() || null,
+    po_no: ((order as { po_no?: string | null }).po_no ?? "").trim() || null,
     start_date: order.start_date ?? null,
     cancel_date: order.cancel_date ?? null,
     created_at: order.created_at ?? null,

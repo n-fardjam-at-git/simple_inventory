@@ -254,6 +254,7 @@ export default async function CustomerOrderPrintPage({
                   <div className="grid grid-cols-2 gap-x-6 text-xs">
                     <div className="space-y-0.5">
                       <Field label="Customer" value={report.customer} />
+                      <Field label="PO No" value={report.po_no} />
                       <Field label="Terms" value={report.terms} />
                       <Field label="Shipping method" value={report.shipping_method} />
                       <Field label="Season" value={report.future_season} />

@@ -10,6 +10,7 @@ import { FitList } from "@/components/list/FitList";
 import { SelectableRow, RowButtons, useList, useListRow } from "@/components/list/ListTable";
 import { useRefreshRow } from "@/components/list/useRefreshRow";
 import { CuttingDropQtyGrid } from "../cutting-orders/CuttingDropQtyGrid";
+import { SysFreight, SysSurcharge } from "@/components/icons/SysImages";
 import { PRODUCT_TYPE } from "@/lib/product-type";
 import { summarizeOrder } from "@/lib/order-summary";
 import { addRequestProduct, removeRequestProduct, saveRequestQty } from "./actions";
@@ -612,8 +613,13 @@ function ChargeRow({ line }: { line: RequestLine }) {
         <div className="font-medium leading-tight">{line.name}</div>
         <p className="text-xs font-light text-stone-500">${Number(line.price).toFixed(2)}</p>
       </td>
-      <td className="min-w-0 pr-1 text-sm tabular-nums">
-        {freight ? usd.format(Number(line.price) || 0) : `${qty} × ${usd.format(Number(line.price) || 0)}`}
+      <td className="min-w-0 pr-1">
+        <div className="flex items-center gap-3">
+          {freight ? <SysFreight /> : <SysSurcharge />}
+          <span className="text-sm tabular-nums">
+            {freight ? usd.format(Number(line.price) || 0) : `${qty} × ${usd.format(Number(line.price) || 0)}`}
+          </span>
+        </div>
       </td>
       <td className="w-52 pr-2 align-bottom">
         <div className="flex justify-end">

@@ -121,6 +121,7 @@ function applyFilters(rows: CustomerOrderRow[], filters: Filters, lines: OrderPr
 
 export function CustomerOrdersWorkspace({
   rows,
+  mayApprove,
   customers,
   addresses,
   shipmentMethods,
@@ -133,6 +134,7 @@ export function CustomerOrdersWorkspace({
   charges,
 }: {
   rows: CustomerOrderRow[];
+  mayApprove: boolean;
   customers: Customer[];
   addresses: Address[];
   shipmentMethods: ShipmentMethod[];
@@ -295,6 +297,7 @@ export function CustomerOrdersWorkspace({
         />
         <CustomerOrdersTable
           rows={filtered}
+          mayApprove={mayApprove}
           customers={customers}
           addresses={addresses}
           shipmentMethods={shipmentMethods}

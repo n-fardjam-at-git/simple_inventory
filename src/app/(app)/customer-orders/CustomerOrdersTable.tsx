@@ -53,9 +53,11 @@ export type CustomerOrderRow = {
   bill_city: string | null;
   ship_to: string[];
   bill_to: string[];
+  po_no: string | null;
+  po_locked: boolean;
 };
 
-function matchAddress(
+export function matchAddress(
   addresses: OrderAddress[],
   customerId: string,
   kinds: string[],
@@ -107,11 +109,14 @@ function headerInitial(order: CustomerOrderRow, addresses: OrderAddress[]): Orde
     transmissionLabel: order.transmission_method ?? "",
     notes: order.notes ?? "",
     terms: order.terms ?? "",
+    poNo: order.po_no ?? "",
+    poLocked: order.po_locked,
   };
 }
 
 export function CustomerOrdersTable({
   rows,
+  mayApprove,
   customers,
   addresses,
   shipmentMethods,
@@ -125,6 +130,8 @@ export function CustomerOrdersTable({
 }: {
   lines: OrderProductLine[];
   rows: CustomerOrderRow[];
+  /** Admin and warehouse approve and revoke. A sales rep only sees the stamp. */
+  mayApprove: boolean;
   customers: OrderCustomer[];
   addresses: OrderAddress[];
   shipmentMethods: OrderShipmentMethod[];
@@ -174,6 +181,7 @@ export function CustomerOrdersTable({
       </div>
       <OrderDetailsPanel
         order={selected}
+        mayApprove={mayApprove}
         lines={selected ? lines.filter((line) => line.customer_order_id === selected.id) : []}
         deleting={deleting}
         deleteError={deleteErr}
@@ -236,6 +244,7 @@ function SelectionBridge({ onSelect }: { onSelect: (id: string | null) => void }
 
 function OrderDetailsPanel({
   order,
+  mayApprove,
   lines,
   deleting,
   deleteError,
@@ -245,6 +254,7 @@ function OrderDetailsPanel({
   onDelete,
 }: {
   order: CustomerOrderRow | null;
+  mayApprove: boolean;
   lines: OrderProductLine[];
   deleting: boolean;
   deleteError: string | null;
@@ -261,7 +271,7 @@ function OrderDetailsPanel({
   const [revokeErr, setRevokeErr] = useState<string | null>(null);
   const [, startApprove] = useTransition();
   const [, startRevoke] = useTransition();
-  const canApprove = order?.status === "pending";
+  const canApprove = mayApprove && order?.status === "pending";
   const approved = order?.status === "approved";
 
   useEffect(() => {
@@ -356,18 +366,20 @@ function OrderDetailsPanel({
                   <span className="inline-flex h-full" aria-label="Approved" title="Approved">
                     <SysApproved className="!h-full !w-auto" />
                   </span>
-                  <span className="relative inline-flex h-full">
-                    <button
-                      type="button"
-                      className="inline-flex h-full cursor-pointer"
-                      aria-label="Revoke approval"
-                      title="Revoke approval"
-                      onClick={revoke}
-                    >
-                      <SysRevoke className="!h-full !w-auto" />
-                    </button>
-                    {revoking ? <WorkingBeside side="left" /> : null}
-                  </span>
+                  {mayApprove ? (
+                    <span className="relative inline-flex h-full">
+                      <button
+                        type="button"
+                        className="inline-flex h-full cursor-pointer"
+                        aria-label="Revoke approval"
+                        title="Revoke approval"
+                        onClick={revoke}
+                      >
+                        <SysRevoke className="!h-full !w-auto" />
+                      </button>
+                      {revoking ? <WorkingBeside side="left" /> : null}
+                    </span>
+                  ) : null}
                 </>
               ) : null}
               <span className="mx-0.5 h-6 w-px shrink-0 bg-stone-300" aria-hidden />
@@ -395,7 +407,8 @@ function OrderDetailsPanel({
             </DismissNote>
           ) : null}
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pt-3 [&>*]:shrink-0">
-            <Section cols={2}>
+            <Section cols={3}>
+              <Fact label="PO No" value={order.po_no || "—"} />
               <Fact label="Season" value={order.future_season || "—"} />
               <Fact label="Deliver by" value={order.cancel_date || "—"} />
             </Section>
@@ -612,7 +625,7 @@ function Address({ title, lines }: { title: string; lines: string[] }) {
 function OrderRow({ row }: { row: CustomerOrderRow }) {
   return (
     <SelectableRow id={row.id}>
-      <td className="py-1.5 tabular-nums">
+      <td className="tabular-nums">
         <Link href={`/customer-orders/${row.id}`} className="underline">
           {row.order_no}
         </Link>

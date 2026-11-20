@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { FitPage } from "@/components/list/FitList";
@@ -8,9 +8,13 @@ import { FitList } from "@/components/list/FitList";
 import { SelectableRow, RowButtons, useList } from "@/components/list/ListTable";
 import { PageTitle, Btn } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
+import { DockedFilterPanel, filterToggleClass } from "@/components/filter/DockedFilterPanel";
+import { FilterClear } from "@/components/filter/FilterClear";
 import { DismissNote } from "@/components/DismissNote";
 import { SysFolder, SysFolderOpen } from "@/components/icons/SysImages";
 import { deliverByMessage, LINE_PRICE_NOTICE, SHIP_AT_ONCE, staffReplyText } from "@/lib/customer-order";
+import { summarizeOrder } from "@/lib/order-summary";
+import { PRODUCT_TYPE } from "@/lib/product-type";
 import type { SeasonRow } from "@/lib/season";
 import { deleteRequest, saveRequestHeader, submitRequest } from "./actions";
 import { RequestProductsPanel } from "./RequestProductsPanel";
@@ -26,6 +30,20 @@ function acceptanceLabel(value: boolean | null) {
   if (value === true) return "Accepted prices and terms";
   if (value === false) return "Waiting for review";
   return "—";
+}
+
+type Filters = { orderNo: string; season: string; status: string };
+
+const EMPTY_FILTER: Filters = { orderNo: "", season: "", status: "" };
+const filterField = "w-full rounded border py-1 pr-6 pl-2";
+const STATUS_OPTIONS = [
+  { id: "draft", label: "Draft" },
+  { id: "submitted", label: "Submitted" },
+  { id: "accepted", label: "Accepted" },
+];
+
+function filtersActive(filters: Filters) {
+  return Boolean(filters.orderNo.trim() || filters.season || filters.status);
 }
 
 function addressLabel(address: RequestAddress) {
@@ -52,18 +70,69 @@ export function MyOrdersWorkspace({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(resumeId);
   const [panelId, setPanelId] = useState<string | null>(resumeId);
-  const selected = orders.find((order) => order.id === selectedId) ?? null;
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [draft, setDraft] = useState<Filters>(EMPTY_FILTER);
+  const [applied, setApplied] = useState<Filters>(EMPTY_FILTER);
+  const [comboKey, setComboKey] = useState(0);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [focusNonce, setFocusNonce] = useState(0);
+  const orderNoEntered = Boolean(draft.orderNo.trim());
+  const filtered = useMemo(() => {
+    const orderNo = applied.orderNo.trim().toLocaleLowerCase("en");
+    return orders.filter((order) => {
+      if (orderNo && !String(order.request_no).toLocaleLowerCase("en").includes(orderNo)) return false;
+      if (applied.season && order.future_season !== applied.season) return false;
+      if (applied.status && order.status !== applied.status) return false;
+      return true;
+    });
+  }, [orders, applied]);
+  const selected = filtered.find((order) => order.id === selectedId) ?? null;
+  const seasonOptions = useMemo(() => {
+    const names = new Set<string>([SHIP_AT_ONCE]);
+    for (const season of seasons) names.add(season.season);
+    for (const order of orders) if (order.future_season) names.add(order.future_season);
+    return [...names].map((name) => ({ id: name, label: name }));
+  }, [seasons, orders]);
+
+  function resetFilter() {
+    setDraft(EMPTY_FILTER);
+    setApplied(EMPTY_FILTER);
+    setComboKey((key) => key + 1);
+  }
+
+  function findByOrderNo() {
+    const text = draft.orderNo.trim().toLocaleLowerCase("en");
+    if (!text) return;
+    const order = filtered.find((item) => String(item.request_no).toLocaleLowerCase("en") === text);
+    if (!order) return;
+    setFocusId(order.id);
+    setFocusNonce((nonce) => nonce + 1);
+    setFilterOpen(false);
+  }
 
   return (
     <>
       <FitPage>
-        <PageTitle title="My orders" />
+        <PageTitle
+          title="My orders"
+          actions={
+            <button
+              type="button"
+              className={filterToggleClass(filtersActive(applied))}
+              onClick={() => setFilterOpen(true)}
+            >
+              {filtersActive(applied) ? "Filtered" : "Filter"}
+            </button>
+          }
+        />
         <div className="flex min-h-0 flex-1 gap-3">
           <div className="flex w-1/2 min-w-0">
             <FitList
-              items={orders}
+              items={filtered}
               getKey={(order) => order.id}
               resumeId={resumeId}
+              focusId={focusId}
+              focusNonce={focusNonce}
               stretch
               thead={
                 <thead>
@@ -86,6 +155,7 @@ export function MyOrdersWorkspace({
           </div>
           <OrderDetails
             order={selected}
+            lines={lines.filter((line) => line.request_id === selectedId)}
             seasons={seasons}
             addresses={addresses}
             panelOpen={panelId === selected?.id}
@@ -94,8 +164,59 @@ export function MyOrdersWorkspace({
           />
         </div>
       </FitPage>
+      <DockedFilterPanel
+        open={filterOpen}
+        comboKey={comboKey}
+        onClose={() => setFilterOpen(false)}
+        onApply={() => setApplied(draft)}
+        onReset={resetFilter}
+      >
+        <label className="block">
+          <span className="mb-1 block text-stone-500">Order</span>
+          <FilterClear
+            goVisible={orderNoEntered}
+            onGo={findByOrderNo}
+            onClear={() => setDraft((current) => ({ ...current, orderNo: "" }))}
+          >
+            <input
+              aria-label="Order"
+              className={`w-full rounded border py-1 pl-2 ${orderNoEntered ? "pr-10" : "pr-6"}`}
+              value={draft.orderNo}
+              onChange={(event) => setDraft((current) => ({ ...current, orderNo: event.target.value }))}
+            />
+          </FilterClear>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-stone-500">Season</span>
+          <FilterClear onClear={() => setDraft((current) => ({ ...current, season: "" }))}>
+            <ComboBox
+              allowEmpty
+              placeholder="Season"
+              aria-label="Season"
+              className={filterField}
+              value={draft.season}
+              onChange={(id) => setDraft((current) => ({ ...current, season: id }))}
+              options={seasonOptions}
+            />
+          </FilterClear>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-stone-500">Status</span>
+          <FilterClear onClear={() => setDraft((current) => ({ ...current, status: "" }))}>
+            <ComboBox
+              allowEmpty
+              placeholder="Status"
+              aria-label="Status"
+              className={filterField}
+              value={draft.status}
+              onChange={(id) => setDraft((current) => ({ ...current, status: id }))}
+              options={STATUS_OPTIONS}
+            />
+          </FilterClear>
+        </label>
+      </DockedFilterPanel>
       <RequestProductsPanel
-        open={panelId != null && panelId === selectedId}
+        open={panelId != null && panelId === selected?.id}
         onClose={() => setPanelId(null)}
         requestId={selected?.id ?? null}
         requestNo={selected?.request_no ?? null}
@@ -110,6 +231,7 @@ export function MyOrdersWorkspace({
 
 function OrderDetails({
   order,
+  lines,
   seasons,
   addresses,
   panelOpen,
@@ -117,6 +239,7 @@ function OrderDetails({
   onSelect,
 }: {
   order: RequestOrder | null;
+  lines: RequestLine[];
   seasons: SeasonRow[];
   addresses: RequestAddress[];
   panelOpen: boolean;
@@ -157,7 +280,7 @@ function OrderDetails({
   }
 
   return (
-    <div className="flex w-1/2 min-w-0 flex-col rounded-lg border border-stone-300 bg-white p-3">
+    <div className="flex min-h-0 w-1/2 min-w-0 flex-col rounded-lg border border-stone-300 bg-white p-3">
       {order ? (
         <>
           <div className="flex items-center justify-between gap-2 border-b border-stone-200 pb-2">
@@ -168,12 +291,14 @@ function OrderDetails({
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="inline-flex h-7 cursor-pointer"
+                className="relative inline-flex h-7 w-7 shrink-0 cursor-pointer"
                 aria-label="Products"
                 title="Products"
                 onClick={onOpenProducts}
               >
-                {panelOpen ? <SysFolderOpen className="!h-full !w-auto" /> : <SysFolder className="!h-full !w-auto" />}
+                <span className="pointer-events-none absolute top-1/2 right-0 -translate-y-1/2 [&_svg]:h-[46px] [&_svg]:w-[46px]">
+                  {panelOpen ? <SysFolderOpen /> : <SysFolder />}
+                </span>
               </button>
               {draft ? (
                 <Btn
@@ -246,6 +371,7 @@ function OrderDetails({
               <p className="whitespace-pre-wrap text-[13px]">{order.notes || "—"}</p>
             </Section>
           </div>
+          <OrderSummary lines={lines} onOpen={onOpenProducts} />
           {editing ? (
             <EditCard
               order={order}
@@ -541,6 +667,86 @@ function EditCard({
 }
 
 const GROUP = "overflow-hidden rounded-md border border-stone-300 bg-stone-50";
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+
+function OrderSummary({ lines, onOpen }: { lines: RequestLine[]; onOpen: () => void }) {
+  const totals = summarizeOrder(
+    lines.map((line) => {
+      const merchandise = line.type === PRODUCT_TYPE.merchandise;
+      const ordered = merchandise
+        ? line.cells.reduce((sum, cell) => sum + (Number(cell.qty) || 0), 0)
+        : line.type === PRODUCT_TYPE.freight
+          ? 1
+          : Number(line.qty) || 0;
+      const price = Number(line.price) || 0;
+      const extended = merchandise
+        ? line.cells.reduce((sum, cell) => sum + (Number(cell.qty) || 0) * (price + (Number(cell.upcharge) || 0)), 0)
+        : ordered * price;
+      return {
+        type: line.type,
+        status: "pending",
+        item: line.item,
+        ordered,
+        extended,
+        shipped: 0,
+        shipped_value: 0,
+      };
+    }),
+  );
+  const rule = "border-b border-stone-200";
+  return (
+    <section
+      className={`${GROUP} mt-2 shrink-0 cursor-pointer hover:border-stone-400`}
+      title="Open the order products"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+    >
+      <h3 className="border-b border-stone-300 bg-stone-200 px-3 py-1 text-xs font-semibold text-stone-800">
+        Order summary
+      </h3>
+      <div className="px-3 py-2">
+        <table className="w-full text-[13px] leading-tight">
+          <tbody>
+            {totals.items.map((item) => (
+              <tr key={item.item} className={rule}>
+                <td className="w-10 py-0.5 text-right tabular-nums">{item.units}</td>
+                <td className="py-0.5 pl-2">{item.item}</td>
+                <td className="py-0.5 text-right tabular-nums">{usd.format(item.amount)}</td>
+              </tr>
+            ))}
+            <tr className={`${rule} font-semibold`}>
+              <td className="w-10 py-0.5 text-right tabular-nums">{totals.units}</td>
+              <td className="py-0.5 pl-2">Total quantity</td>
+              <td className="py-0.5 text-right tabular-nums">{usd.format(totals.merchandise)}</td>
+            </tr>
+            <tr className={rule}>
+              <td />
+              <td className="py-0.5 pl-2">Surcharges</td>
+              <td className="py-0.5 text-right tabular-nums">{usd.format(totals.surcharge)}</td>
+            </tr>
+            <tr className={rule}>
+              <td />
+              <td className="py-0.5 pl-2">Freight</td>
+              <td className="py-0.5 text-right tabular-nums">{usd.format(totals.freight)}</td>
+            </tr>
+            <tr>
+              <td />
+              <th className="py-1 pl-2 text-left text-sm font-semibold">Grand total</th>
+              <td className="py-1 text-right text-sm font-semibold tabular-nums">{usd.format(totals.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 function Section({ title, children }: { title?: string; children: ReactNode }) {
   return (

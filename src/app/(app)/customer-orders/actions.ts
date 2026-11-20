@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/auth";
 import { LINE_STATUS, parseCommissionPercent, SHIP_AT_ONCE, shipmentMethodLabel, WORKFLOW_STATUS } from "@/lib/customer-order";
 import { PRODUCT_TYPE } from "@/lib/product-type";
 import { parseCellFields } from "@/lib/products";
@@ -28,6 +29,12 @@ async function staffId() {
     data: { user },
   } = await supabase.auth.getUser();
   return { supabase, userId: user?.id ?? null };
+}
+
+/** Approved and picking are set by admin or warehouse, not by a sales rep. */
+async function maySetWorkflow() {
+  const profile = await getProfile();
+  return profile?.role === "admin" || profile?.role === "warehouse";
 }
 
 async function merchandiseBlocksWorkflow(
@@ -171,10 +178,11 @@ export async function createCustomerOrder(formData: FormData) {
     created_by: userId,
     updated_by: userId,
     notes: blank(formData.get("notes")),
+    po_no: blank(formData.get("po_no")),
     ...addressFields("ship", ship),
     ...addressFields("bill", bill),
   });
-  if (error) return error.message;
+  if (error) return error.code === "23505" ? "That customer already has this PO number." : error.message;
   revalidatePath("/customer-orders");
 }
 
@@ -222,7 +230,7 @@ export async function saveCustomerOrderHeader(orderId: string, formData: FormDat
   const { data: current } = await supabase
     .from("customer_orders")
     .select(
-      "shipment_method_id, shipping_method, transmission_method_id, transmission_method, terms",
+      "shipment_method_id, shipping_method, transmission_method_id, transmission_method, terms, po_no, request_id",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -237,6 +245,7 @@ export async function saveCustomerOrderHeader(orderId: string, formData: FormDat
     future_season: futureSeason,
     terms: blank(formData.get("terms")),
     notes: blank(formData.get("notes")),
+    po_no: current.request_id ? current.po_no : blank(formData.get("po_no")),
     updated_by: userId,
     updated_at: new Date().toISOString(),
   };
@@ -257,7 +266,7 @@ export async function saveCustomerOrderHeader(orderId: string, formData: FormDat
   if (!shipKeep) Object.assign(patch, addressFields("ship", ship));
   if (!billKeep) Object.assign(patch, addressFields("bill", bill));
   const { error } = await supabase.from("customer_orders").update(patch).eq("id", orderId);
-  if (error) return error.message;
+  if (error) return error.code === "23505" ? "That customer already has this PO number." : error.message;
   revalidatePath("/customer-orders");
   revalidatePath(`/customer-orders/${orderId}`);
 }
@@ -282,6 +291,7 @@ export async function updateCustomerOrderRow(
     updated_at: new Date().toISOString(),
   };
   if (patch.status) {
+    if (!(await maySetWorkflow())) return "Only admin or warehouse can approve an order.";
     if (!WORKFLOW_STATUS.includes(patch.status as (typeof WORKFLOW_STATUS)[number])) {
       return "That status is set from the merchandise lines.";
     }
@@ -297,6 +307,7 @@ export async function updateCustomerOrderRow(
 }
 
 export async function approveCustomerOrder(orderId: string) {
+  if (!(await maySetWorkflow())) return "Only admin or warehouse can approve an order.";
   const { supabase, userId } = await staffId();
   const { data: order } = await supabase
     .from("customer_orders")
@@ -322,6 +333,7 @@ export async function approveCustomerOrder(orderId: string) {
 }
 
 export async function revokeCustomerOrder(orderId: string) {
+  if (!(await maySetWorkflow())) return "Only admin or warehouse can revoke an approval.";
   const { supabase, userId } = await staffId();
   const { data: order } = await supabase
     .from("customer_orders")
@@ -357,7 +369,9 @@ export async function updateCustomerOrder(orderId: string, formData: FormData) {
   if (methods.error) redirect(orderError(orderId, methods.error));
   const { data: current } = await supabase
     .from("customer_orders")
-    .select("shipment_method_id, shipping_method, transmission_method_id, transmission_method")
+    .select(
+      "shipment_method_id, shipping_method, transmission_method_id, transmission_method, po_no, request_id",
+    )
     .eq("id", orderId)
     .maybeSingle();
   const patch: Record<string, unknown> = {
@@ -378,6 +392,7 @@ export async function updateCustomerOrder(orderId: string, formData: FormData) {
         ? null
         : (current?.transmission_method ?? null),
     notes: blank(formData.get("notes")),
+    po_no: current?.request_id ? (current.po_no ?? null) : blank(formData.get("po_no")),
     ship_address_line1: blank(formData.get("ship_address_line1")),
     ship_address_line2: blank(formData.get("ship_address_line2")),
     ship_city: blank(formData.get("ship_city")),
@@ -393,7 +408,7 @@ export async function updateCustomerOrder(orderId: string, formData: FormData) {
     updated_by: userId,
     updated_at: new Date().toISOString(),
   };
-  if (status) {
+  if (status && (await maySetWorkflow())) {
     if (!WORKFLOW_STATUS.includes(status as (typeof WORKFLOW_STATUS)[number])) {
       redirect(orderError(orderId, "That status is set from the merchandise lines."));
     }
@@ -405,7 +420,14 @@ export async function updateCustomerOrder(orderId: string, formData: FormData) {
     patch.status = status;
   }
   const { error } = await supabase.from("customer_orders").update(patch).eq("id", orderId);
-  if (error) redirect(orderError(orderId, error.message));
+  if (error) {
+    redirect(
+      orderError(
+        orderId,
+        error.code === "23505" ? "That customer already has this PO number." : error.message,
+      ),
+    );
+  }
   revalidatePath(`/customer-orders/${orderId}`);
   revalidatePath("/customer-orders");
 }

@@ -1,4 +1,11 @@
 import type { Cell, MatrixDrop, MatrixSize } from "@/components/matrix/QtyMatrix";
+import type {
+  OrderAddress,
+  OrderCustomer,
+  OrderSeason,
+  OrderShipmentMethod,
+  OrderTerm,
+} from "../customer-orders/NewOrderForm";
 
 export type DraftOrderRow = {
   id: string;
@@ -22,6 +29,22 @@ export type DraftOrderRow = {
   status: string;
   ship: string[];
   bill: string[];
+  ship_line1: string | null;
+  ship_city: string | null;
+  bill_line1: string | null;
+  bill_city: string | null;
+  /** Entered by a sales rep (Received via Online by sales rep), not by the customer in the shop. */
+  rep_entered: boolean;
+  customer_has_login: boolean;
+};
+
+/** What the Add proposal card needs. Null for a role that cannot enter a proposal. */
+export type ProposalChoices = {
+  customers: OrderCustomer[];
+  addresses: OrderAddress[];
+  shipmentMethods: OrderShipmentMethod[];
+  seasons: OrderSeason[];
+  terms: OrderTerm[];
 };
 
 export type DraftChoice = { id: string; label: string };

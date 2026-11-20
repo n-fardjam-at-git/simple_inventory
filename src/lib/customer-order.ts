@@ -22,6 +22,8 @@ export const SHIP_AT_ONCE = "Ship at once";
 
 export const ONLINE_BY_CUSTOMER = "Online by customer";
 
+export const ONLINE_BY_SALES_REP = "Online by sales rep";
+
 export const LINE_PRICE_NOTICE =
   "All prices are line prices, any agreed discount will be applied by our staff and will be sent back to you to confirm.";
 

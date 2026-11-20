@@ -11,12 +11,12 @@ function one<T>(raw: unknown): T | null {
 }
 
 export default async function CustomerOrdersPage() {
-  await requireRoles(["admin", "warehouse", "sales_rep"]);
+  const profile = await requireRoles(["admin", "warehouse", "sales_rep"]);
   const supabase = await createClient();
   const { data: orders } = await supabase
     .from("customer_orders")
     .select(
-      "id, order_no, created_at, customer_id, status, start_date, cancel_date, future_season, terms, shipment_method_id, shipping_method, transmission_method_id, transmission_method, sales_rep_id, created_by, notes, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country, customers ( account_no, company_name, account_number ), shipment_methods ( shipper, method ), transmission_methods ( name )",
+      "id, order_no, po_no, request_id, created_at, customer_id, status, start_date, cancel_date, future_season, terms, shipment_method_id, shipping_method, transmission_method_id, transmission_method, sales_rep_id, created_by, notes, ship_address_line1, ship_address_line2, ship_city, ship_region, ship_postal_code, ship_country, bill_address_line1, bill_address_line2, bill_city, bill_region, bill_postal_code, bill_country, customers ( account_no, company_name, account_number ), shipment_methods ( shipper, method ), transmission_methods ( name )",
     )
     .order("order_no", { ascending: false });
   const peopleIds = [
@@ -167,6 +167,8 @@ export default async function CustomerOrdersPage() {
       bill_city: order.bill_city ?? null,
       ship_to: addressLines(order as Record<string, unknown>, "ship"),
       bill_to: addressLines(order as Record<string, unknown>, "bill"),
+      po_no: order.po_no ?? null,
+      po_locked: Boolean(order.request_id),
     };
   });
 
@@ -279,6 +281,7 @@ export default async function CustomerOrdersPage() {
     <div>
       <CustomerOrdersWorkspace
         rows={rows}
+        mayApprove={profile.role === "admin" || profile.role === "warehouse"}
         customers={(customers ?? []).map((customer) => ({
           id: customer.id,
           account_no: customer.account_no,
