@@ -31,6 +31,13 @@ async function staffId() {
   return { supabase, userId: user?.id ?? null };
 }
 
+/** A delete the database refused because a customer shipment still has that line. */
+function deleteMessage(error: { message: string }, what: string) {
+  return error.message.includes("customer_shipment_products")
+    ? `${what} is on a customer shipment. Remove it from the shipment first.`
+    : error.message;
+}
+
 /** Approved and picking are set by admin or warehouse, not by a sales rep. */
 async function maySetWorkflow() {
   const profile = await getProfile();
@@ -358,7 +365,7 @@ export async function revokeCustomerOrder(orderId: string) {
 export async function deleteCustomerOrder(id: string) {
   const { supabase } = await staffId();
   const { error } = await supabase.from("customer_orders").delete().eq("id", id);
-  if (error) return error.message;
+  if (error) return deleteMessage(error, "This order");
   revalidatePath("/customer-orders");
 }
 
@@ -1018,7 +1025,7 @@ export async function removeCustomerOrderProductId(orderId: string, productId: s
     .delete()
     .eq("customer_order_id", orderId)
     .eq("product_id", productId);
-  if (error) return error.message;
+  if (error) return deleteMessage(error, "This product");
   revalidatePath(`/customer-orders/${orderId}`);
   revalidatePath("/customer-orders");
   return null;
@@ -1111,7 +1118,7 @@ export async function removeCustomerOrderProduct(orderId: string, productId: str
     .delete()
     .eq("customer_order_id", orderId)
     .eq("product_id", productId);
-  if (error) redirect(orderError(orderId, error.message));
+  if (error) redirect(orderError(orderId, deleteMessage(error, "This product")));
   revalidatePath(`/customer-orders/${orderId}`);
   revalidatePath("/customer-orders");
 }
