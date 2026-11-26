@@ -9,9 +9,10 @@ import { FitList } from "@/components/list/FitList";
 import { RowButtons, SelectableRow, useList } from "@/components/list/ListTable";
 import { WorkingBeside } from "@/components/WorkingBeside";
 import { Btn, Card } from "@/components/ui";
-import { SysApprove, SysApproved, SysFolder, SysFolderOpen, SysPrint, SysRevoke } from "@/components/icons/SysImages";
+import { SysApprove, SysApproved, SysFolder, SysFolderOpen, SysPrint } from "@/components/icons/SysImages";
 import { customerPickLabel } from "@/lib/customer";
-import { orderStatusLabel } from "@/lib/customer-order";
+import { isApprovedOrder, orderStatusLabel } from "@/lib/customer-order";
+import { isPickableLine, isShippableOrder } from "@/lib/pick-list";
 import { summarizeOrder } from "@/lib/order-summary";
 import { summaryLine, type OrderProductLine } from "./OrderProductsPanel";
 import { approveCustomerOrder, deleteCustomerOrder, revokeCustomerOrder, saveCustomerOrderHeader } from "./actions";
@@ -55,6 +56,14 @@ export type CustomerOrderRow = {
   bill_to: string[];
   po_no: string | null;
   po_locked: boolean;
+  /** Ship-to, bill-to, terms, shipping method, and sales rep. Orders that share it can ship together. */
+  ship_key: string;
+};
+
+/** Pick all on the details header. Null when this login cannot ship. */
+export type OrderPickAll = {
+  isPicked: (orderId: string, productId: string) => boolean;
+  onPickAll: (order: CustomerOrderRow, productIds: string[]) => void;
 };
 
 export function matchAddress(
@@ -125,9 +134,11 @@ export function CustomerOrdersTable({
   terms,
   lines,
   onOpen,
+  pickAll = null,
   focusId = null,
   focusNonce = 0,
 }: {
+  pickAll?: OrderPickAll | null;
   lines: OrderProductLine[];
   rows: CustomerOrderRow[];
   /** Admin and warehouse approve and revoke. A sales rep only sees the stamp. */
@@ -182,6 +193,7 @@ export function CustomerOrdersTable({
       <OrderDetailsPanel
         order={selected}
         mayApprove={mayApprove}
+        pickAll={pickAll}
         lines={selected ? lines.filter((line) => line.customer_order_id === selected.id) : []}
         deleting={deleting}
         deleteError={deleteErr}
@@ -245,6 +257,7 @@ function SelectionBridge({ onSelect }: { onSelect: (id: string | null) => void }
 function OrderDetailsPanel({
   order,
   mayApprove,
+  pickAll,
   lines,
   deleting,
   deleteError,
@@ -255,6 +268,7 @@ function OrderDetailsPanel({
 }: {
   order: CustomerOrderRow | null;
   mayApprove: boolean;
+  pickAll: OrderPickAll | null;
   lines: OrderProductLine[];
   deleting: boolean;
   deleteError: string | null;
@@ -272,7 +286,17 @@ function OrderDetailsPanel({
   const [, startApprove] = useTransition();
   const [, startRevoke] = useTransition();
   const canApprove = mayApprove && order?.status === "pending";
-  const approved = order?.status === "approved";
+  /** The stamp also shows while the order is picking: approved, and on an open shipment. */
+  const approved = isApprovedOrder(order?.status);
+  /** An approval is revoked only while no shipment is open for the order. */
+  const canRevoke = mayApprove && order?.status === "approved";
+  /** Open lines of an order that can ship, for Pick all. */
+  const pickable =
+    pickAll && order && isShippableOrder(order.status)
+      ? lines.filter(isPickableLine).map((line) => line.product_id)
+      : [];
+  const allPicked =
+    Boolean(pickAll && order) && pickable.every((id) => pickAll!.isPicked(order!.id, id));
 
   useEffect(() => {
     setApproveErr(null);
@@ -321,12 +345,13 @@ function OrderDetailsPanel({
     <div className="flex min-h-0 w-1/2 min-w-0 flex-col overflow-hidden rounded-lg border border-stone-300 bg-white p-3">
       {order ? (
         <>
-          <div className="flex h-[39px] shrink-0 items-end justify-between gap-3 border-b border-stone-300 pb-1">
+          <div className="shrink-0 border-b border-stone-300 pb-1">
+            <div className="flex h-[34px] items-center justify-between gap-3">
             <h2 className="min-w-0 truncate text-sm leading-5">
               <span className="font-medium text-stone-900">{order.customer}</span>
               <span className="font-normal text-stone-500"> · Order No {order.order_no}</span>
             </h2>
-            <div className="flex h-[34px] shrink-0 items-center gap-2">
+            <div className="flex h-full shrink-0 items-center gap-2">
               <button
                 type="button"
                 className="group inline-flex h-full cursor-pointer rounded text-stone-600 hover:text-stone-900 [&_svg]:h-[34px] [&_svg]:w-[34px]"
@@ -366,23 +391,44 @@ function OrderDetailsPanel({
                   <span className="inline-flex h-full" aria-label="Approved" title="Approved">
                     <SysApproved className="!h-full !w-auto" />
                   </span>
-                  {mayApprove ? (
-                    <span className="relative inline-flex h-full">
+                  {canRevoke ? (
+                    <span className="relative inline-flex h-full items-center">
                       <button
                         type="button"
-                        className="inline-flex h-full cursor-pointer"
+                        className="relative h-[30px] overflow-hidden rounded-lg border border-[#FDE68A]/60 bg-[linear-gradient(135deg,#F59E0B,#D97706)] px-3 text-xs font-semibold text-white shadow-[0_1px_2px_rgba(217,119,6,0.28)]"
                         aria-label="Revoke approval"
                         title="Revoke approval"
                         onClick={revoke}
                       >
-                        <SysRevoke className="!h-full !w-auto" />
+                        <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+                        <span className="relative">Revoke</span>
                       </button>
                       {revoking ? <WorkingBeside side="left" /> : null}
                     </span>
                   ) : null}
                 </>
               ) : null}
-              <span className="mx-0.5 h-6 w-px shrink-0 bg-stone-300" aria-hidden />
+            </div>
+            </div>
+            <div className="mt-1 flex h-[34px] items-center justify-end gap-2">
+              {pickAll && pickable.length ? (
+                <button
+                  type="button"
+                  className="rounded border border-stone-300 px-2 py-1 text-xs hover:bg-stone-100 disabled:opacity-40"
+                  title={
+                    allPicked
+                      ? "Every open product of this order is on the pick list"
+                      : "Add every open product of this order to the pick list"
+                  }
+                  disabled={allPicked}
+                  onClick={() => pickAll.onPickAll(order, pickable)}
+                >
+                  {allPicked ? "Picked" : "Pick all"}
+                </button>
+              ) : null}
+              {pickAll && pickable.length ? (
+                <span className="mx-0.5 h-6 w-px shrink-0 bg-stone-300" aria-hidden />
+              ) : null}
               <div className="[&>div]:flex-nowrap">
                 <RowButtons
                   editing={false}
@@ -633,7 +679,11 @@ function OrderRow({ row }: { row: CustomerOrderRow }) {
       <td className="tabular-nums">{row.created_date ?? "—"}</td>
       <td>{row.customer}</td>
       <td className="tabular-nums">{row.start_date ?? "—"}</td>
-      <td className={row.status === "approved" ? "text-red-700" : undefined}>
+      <td
+        className={
+          row.status === "approved" ? "text-red-700" : row.status === "picking" ? "text-yellow-600" : undefined
+        }
+      >
         {orderStatusLabel(row.status)}
       </td>
       <td className="tabular-nums">{row.left_to_ship}</td>

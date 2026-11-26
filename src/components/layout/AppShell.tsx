@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Role } from "@/lib/auth";
+import { HideOnReport } from "@/components/layout/HideOnReport";
+import { PickListCount, SignOutButton } from "@/components/pick/PickListNav";
 
 const LINKS: { href: string; label: string; roles: Role[] }[] = [
   { href: "/", label: "Dashboard", roles: ["admin", "warehouse", "sales_rep", "customer"] },
@@ -16,6 +18,7 @@ const LINKS: { href: string; label: string; roles: Role[] }[] = [
   { href: "/users", label: "Users", roles: ["admin"] },
   { href: "/draft-orders", label: "Draft orders", roles: ["admin", "warehouse", "sales_rep"] },
   { href: "/customer-orders", label: "Customer orders", roles: ["admin", "warehouse", "sales_rep"] },
+  { href: "/pick-list", label: "Pick list", roles: ["admin", "warehouse"] },
   { href: "/customer-shipments", label: "Customer shipments", roles: ["admin", "warehouse", "sales_rep"] },
   { href: "/customers", label: "Customers", roles: ["admin", "warehouse", "sales_rep"] },
   { href: "/payment-terms", label: "Terms", roles: ["admin"] },
@@ -35,6 +38,7 @@ const LINKS: { href: string; label: string; roles: Role[] }[] = [
 export function AppShell({
   tradeName,
   displayName,
+  userId,
   role,
   submittedPackingLists = 0,
   submittedOrderRequests = 0,
@@ -42,6 +46,8 @@ export function AppShell({
 }: {
   tradeName: string;
   displayName: string;
+  /** The login that owns the pick list kept in this browser. */
+  userId: string;
   role: Role;
   submittedPackingLists?: number;
   submittedOrderRequests?: number;
@@ -50,6 +56,7 @@ export function AppShell({
   const links = LINKS.filter((l) => l.roles.includes(role));
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
+      <HideOnReport>
       <header className="border-b border-stone-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div>
@@ -60,9 +67,7 @@ export function AppShell({
             <span className="mr-3">
               {displayName} · {role.replace("_", " ")}
             </span>
-            <button className="rounded border border-stone-300 px-2 py-1 hover:bg-stone-100" type="submit">
-              Sign out
-            </button>
+            <SignOutButton />
           </form>
         </div>
         <nav className="mx-auto flex max-w-7xl flex-wrap gap-1 px-4 pb-3">
@@ -78,6 +83,7 @@ export function AppShell({
                   {submittedPackingLists}
                 </span>
               ) : null}
+              {l.href === "/pick-list" ? <PickListCount userId={userId} /> : null}
               {l.href === "/draft-orders" && submittedOrderRequests > 0 ? (
                 <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-stone-900 px-1.5 text-xs font-medium text-white tabular-nums">
                   {submittedOrderRequests}
@@ -87,6 +93,7 @@ export function AppShell({
           ))}
         </nav>
       </header>
+      </HideOnReport>
       <main className="mx-auto max-w-7xl px-4 py-6 print:max-w-none print:p-0">{children}</main>
     </div>
   );

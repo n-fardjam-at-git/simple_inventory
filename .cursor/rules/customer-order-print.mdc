@@ -11,7 +11,7 @@ When the user says **customer-order-print**, reuse this instead of a PDF export 
 
 ## Paper and chrome
 
-- US letter **portrait 8.5×11**, **0.5in** margins (0.65in at the bottom for the page number). New tab with **Print**, **Save PDF**, and **Close**. The print dialog does not open by itself (`autoPrint={false}`), so the page can be read and **Save PDF** used first. Cutting-order and vendor-shipment prints keep their auto-open.
+- US letter **portrait 8.5×11**, **0.5in** margins (0.65in at the bottom for the page number). New tab with **Print**, **Save PDF**, and **Close**. That tab has no app header and no menu (`HideOnReport`, `src/components/layout/HideOnReport.tsx`), only those buttons above the report. Every report tab is the same: a path ending in `/print`, and `/shop/preview`. The print dialog does not open by itself (`autoPrint` is off by default in `PrintActions`), so the page can be read and **Save PDF** used first. No report opens the dialog by itself, cutting-order and vendor-shipment prints included.
 - **Page 1:** company name centered, then **Date** (today, `MM/DD/YYYY`, this computer's date, right-aligned under the company name; `PrintDate`), then **Order {n} · {customer}**, then the **Order details** box. The date prints on page 1 only.
 - **Later pages:** the same Order / customer head only (table `thead`).
 - **Page numbers** print in the bottom-right margin as **Page {n} of {total}** (`@page` margin box with `counter(page)` and `counter(pages)`). The browser counts the pages. The repeated head carries no page number.

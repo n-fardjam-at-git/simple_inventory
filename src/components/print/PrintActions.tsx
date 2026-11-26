@@ -25,7 +25,7 @@ function outerHeight(el: HTMLElement) {
   );
 }
 
-type Chunk = { height: number; lotId: string | null; breakBefore?: boolean };
+type Chunk = { height: number; lotId: string | null };
 
 function measureChunks(report: HTMLElement): Chunk[] {
   const host = document.createElement("div");
@@ -37,14 +37,10 @@ function measureChunks(report: HTMLElement): Chunk[] {
   document.body.appendChild(host);
 
   const chunks: Chunk[] = [];
-  const push = (
-    el: HTMLElement | null,
-    lotId: string | null,
-    breakBefore?: boolean,
-  ) => {
+  const push = (el: HTMLElement | null, lotId: string | null) => {
     if (!el) return;
     const height = outerHeight(el);
-    if (height > 0) chunks.push({ height, lotId, breakBefore });
+    if (height > 0) chunks.push({ height, lotId });
   };
 
   push(clone.querySelector(".print-first-title"), null);
@@ -57,9 +53,9 @@ function measureChunks(report: HTMLElement): Chunk[] {
     const products = [
       ...lot.querySelectorAll<HTMLElement>("table.print-lot-cont > tbody > tr"),
     ];
-    const breakBefore = lot.classList.contains("print-summary");
+    // A group with no product rows (the summary, an empty lot) is one block that moves whole.
     if (products.length === 0) {
-      push(lot, lotId, breakBefore);
+      push(lot, lotId);
       return;
     }
     const headH = lotHead ? outerHeight(lotHead) : 0;
@@ -94,12 +90,6 @@ function countPrintPages(report: HTMLElement, repeatPageHead: boolean) {
     const sameLot =
       i > 0 && chunks[i - 1].lotId != null && chunks[i - 1].lotId === chunk.lotId;
 
-    if (chunk.breakBefore && used > 0) {
-      pages += 1;
-      used = laterHead;
-      pageH = laterPage;
-    }
-
     if (used > 0 && used + h > pageH) {
       pages += 1;
       used = laterHead + (sameLot ? continuation : 0);
@@ -124,11 +114,11 @@ export function PrintActions({
   vendorLabel,
   repeatPageHead = false,
   marginPageNumbers = false,
-  autoPrint = true,
+  autoPrint = false,
   children,
 }: {
   children?: ReactNode;
-  /** Open the print dialog as soon as the page loads. Off: the page waits for Print or Save PDF. */
+  /** Open the print dialog as soon as the page loads. Off by default: every report waits for Print or Save PDF. */
   autoPrint?: boolean;
   title: string;
   orderLabel: string;

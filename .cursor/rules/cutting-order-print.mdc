@@ -11,7 +11,7 @@ When the user says **cutting-order-print**, reuse this instead of a landscape PD
 
 ## Paper and chrome
 
-- US letter **portrait 8.5×11**, **0.5in** margins. New tab; Print / Close; auto-open the print dialog.
+- US letter **portrait 8.5×11**, **0.5in** margins. New tab; Print / Close. The print dialog does not open by itself; it waits for **Print**. That tab has no app header and no menu (`HideOnReport`), only those buttons above the report.
 - **Page 1:** company name centered, then **Cutting {n} · To {vendor} · {page} of {pages}**, then brand / date / PO.
 - **Later pages:** the same Cutting / To header only (table `thead`) — not the company name. Do not show `0 of 0`. Count pages from letter-width layout, including jumps when a product block will not fit the leftover space (`break-inside-avoid` on a model + matrix).
 - Do not put each article on its own sheet. Groups **flow**; a group may split. The group bar is **{lot_no}** once. Do not print Article, and do not print the article or color beside it. The repeating row under that bar is empty so the lot number cannot show twice. Tight vertical spacing.

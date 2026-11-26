@@ -5,13 +5,22 @@ import type { CustomerOrderRow } from "./CustomerOrdersTable";
 import type { CatalogChoice, ChargeChoice, OrderProductLine, SetItem } from "./OrderProductsPanel";
 import type { Cell, MatrixDrop, MatrixSize } from "@/components/matrix/QtyMatrix";
 import { asSeasonRows } from "@/lib/season";
+import { SHIPMENT_OPEN_STATUS } from "@/lib/customer-shipment";
+import { orderShipKey } from "@/lib/pick-list";
 
 function one<T>(raw: unknown): T | null {
   return (Array.isArray(raw) ? raw[0] : raw) as T | null;
 }
 
-export default async function CustomerOrdersPage() {
+export default async function CustomerOrdersPage({
+  searchParams,
+}: {
+  /** Back from the pick list: the order to open, and its product to select. */
+  searchParams: Promise<{ order?: string; product?: string }>;
+}) {
+  const { order: openOrderId, product: openProductId } = await searchParams;
   const profile = await requireRoles(["admin", "warehouse", "sales_rep"]);
+  const mayShip = profile.role === "admin" || profile.role === "warehouse";
   const supabase = await createClient();
   const { data: orders } = await supabase
     .from("customer_orders")
@@ -93,6 +102,27 @@ export default async function CustomerOrdersPage() {
     .eq("is_active", true)
     .order("type")
     .order("name");
+  // An order's freight or surcharge goes on one shipment only, so it cannot be picked twice.
+  const { data: shippedChargeRows } = mayShip
+    ? await supabase
+        .from("customer_shipment_products")
+        .select("customer_order_id, product_id, products!inner ( type ), customer_shipments!inner ( status )")
+        .not("customer_order_id", "is", null)
+        .in("products.type", [2, 3])
+        .neq("customer_shipments.status", "canceled")
+    : { data: [] };
+  const chargeOnShipment = new Set(
+    (shippedChargeRows ?? []).map((row) => `${row.customer_order_id}:${row.product_id}`),
+  );
+  // An order product on a shipment that is not shipped and not canceled reads Picking, with no Pick.
+  const { data: openShipmentRows } = await supabase
+    .from("customer_shipment_products")
+    .select("customer_order_id, product_id, customer_shipments!inner ( status )")
+    .not("customer_order_id", "is", null)
+    .in("customer_shipments.status", [...SHIPMENT_OPEN_STATUS]);
+  const onOpenShipment = new Set(
+    (openShipmentRows ?? []).map((row) => `${row.customer_order_id}:${row.product_id}`),
+  );
   const productIds = [...new Set((lineRows ?? []).map((line) => line.product_id))];
   const { data: sizeRows } = productIds.length
     ? await supabase
@@ -169,6 +199,7 @@ export default async function CustomerOrdersPage() {
       bill_to: addressLines(order as Record<string, unknown>, "bill"),
       po_no: order.po_no ?? null,
       po_locked: Boolean(order.request_id),
+      ship_key: orderShipKey(order),
     };
   });
 
@@ -189,6 +220,8 @@ export default async function CustomerOrdersPage() {
     dropsByProduct.set(row.product_id, list);
   }
   const cellsByLine = new Map<string, Cell[]>();
+  /** Ordered minus shipped, per cell and never below zero, summed per line. */
+  const leftByLine = new Map<string, number>();
   const shippedByLine = new Map<string, number>();
   /** Shipped quantity times the size extra, summed per line. The line price is added per shipped unit later. */
   const shippedExtraByLine = new Map<string, number>();
@@ -202,6 +235,11 @@ export default async function CustomerOrdersPage() {
       upcharge: cell.price == null ? 0 : Number(cell.price),
     });
     cellsByLine.set(key, list);
+    leftByLine.set(
+      key,
+      (leftByLine.get(key) ?? 0) +
+        Math.max(0, Number(cell.qty ?? 0) - Number(cell.qty_shipped ?? 0)),
+    );
     shippedByLine.set(key, (shippedByLine.get(key) ?? 0) + Number(cell.qty_shipped ?? 0));
     shippedExtraByLine.set(
       key,
@@ -234,9 +272,12 @@ export default async function CustomerOrdersPage() {
     }>(product?.models ?? null);
     const item = one<{ name: string | null }>(model?.items ?? null);
     const type = product?.type ?? 1;
+    const lineKey = `${line.customer_order_id}:${line.product_id}`;
     return {
       customer_order_id: line.customer_order_id,
       product_id: line.product_id,
+      left_to_ship: type === 1 ? (leftByLine.get(lineKey) ?? 0) : chargeOnShipment.has(lineKey) ? 0 : 1,
+      picking: onOpenShipment.has(lineKey),
       status: line.status,
       type,
       qty: line.qty == null ? null : Number(line.qty),
@@ -281,7 +322,10 @@ export default async function CustomerOrdersPage() {
     <div>
       <CustomerOrdersWorkspace
         rows={rows}
-        mayApprove={profile.role === "admin" || profile.role === "warehouse"}
+        userId={profile.id}
+        openOrderId={openOrderId ?? null}
+        openProductId={openProductId ?? null}
+        mayApprove={mayShip}
         customers={(customers ?? []).map((customer) => ({
           id: customer.id,
           account_no: customer.account_no,

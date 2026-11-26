@@ -37,6 +37,7 @@ export default async function AppLayout({
     <AppShell
       tradeName={tradeName}
       displayName={profile.display_name}
+      userId={profile.id}
       role={profile.role}
       submittedPackingLists={submittedPackingLists}
       submittedOrderRequests={submittedOrderRequests}

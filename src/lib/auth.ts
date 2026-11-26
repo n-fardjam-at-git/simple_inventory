@@ -54,6 +54,7 @@ export function canSeeNav(role: Role, href: string) {
     "/vendors",
     "/cutting-orders",
     "/vendor-shipments",
+    "/pick-list",
     "/customer-shipments",
     "/customer-orders",
     "/customers",

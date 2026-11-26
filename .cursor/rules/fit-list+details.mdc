@@ -9,6 +9,8 @@ Reference pages:
 
 - `/customer-orders`: `src/app/(app)/customer-orders/CustomerOrdersTable.tsx` (Fit List + `OrderDetailsPanel`) inside `CustomerOrdersWorkspace.tsx`.
 - `/customers`: `src/app/(app)/customers/CustomersTable.tsx` (Fit List + `CustomerDetailsPanel`) inside `CustomersWorkspace.tsx`.
+- `/customer-shipments`: `src/app/(app)/customer-shipments/CustomerShipmentsTable.tsx` (Fit List + `ShipmentDetailsPanel`) inside `CustomerShipmentsWorkspace.tsx`.
+- `/pick-list`: `src/app/(app)/pick-list/PickListWorkspace.tsx` (Fit List of customers + details with a second Fit List of the picked orders and products).
 
 When the user says **fit-list+details**, reuse this instead of a new two-pane layout, an inline-expanding row, or a popup for the selected row. The list half is the **Fit List** (full rules below). The right half is a details container for the selected row.
 
@@ -33,8 +35,8 @@ When the user says **fit-list+details**, reuse this instead of a new two-pane la
 
 ## Details header
 
-- A fixed-height header with a bottom border. The name and number on the left (name in medium text, number in muted text), truncated if long.
-- On the right, on one line, aligned with each other: icon controls (**Open**, **Print**, and any status controls) with no box around them, then a thin divider, then **Edit** and **Delete** in the Fit List chip (`RowButtons`, `editing={false}`).
+- A two-line header with a bottom border. The first line has the name and number on the left (name in medium text, number in muted text, truncated if long) and the icon controls on the right (**Open**, **Print**, and any status controls), with no box around the icons.
+- The second line is right-aligned: any text actions, then a thin divider, then **Edit** and **Delete** in the Fit List chip (`RowButtons`, `editing={false}`).
 - **Edit** opens the same card as **Add new**, filled with this row. **Save** and **Cancel** appear on that card only after a field changes.
 - **Delete** asks for confirmation. **Working…** floats to its left, another click is ignored until the write finishes, and an error shows as a `DismissNote` under the header.
 - **Open** (folder icon) opens a docked panel on the right. **Print** opens the print page in a new tab.

@@ -202,8 +202,10 @@ body {
     break-inside: avoid;
   }
 
+  /* The summary follows the last line and moves to a new sheet whole when it does not fit. */
   .print-summary {
-    break-before: page;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .print-report-tight .print-lot-cont {

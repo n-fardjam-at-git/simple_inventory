@@ -549,7 +549,7 @@ export function OrderHeaderCard({
   );
 }
 
-function FieldClear({
+export function FieldClear({
   onClear,
   top = false,
   className = "right-1",

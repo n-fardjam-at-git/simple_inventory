@@ -11,12 +11,15 @@ import { customerPickLabel } from "@/lib/customer";
 import { SHIP_AT_ONCE } from "@/lib/customer-order";
 import { PRODUCT_TYPE } from "@/lib/product-type";
 import type { SeasonRow } from "@/lib/season";
-import { CustomerOrdersTable, type CustomerOrderRow } from "./CustomerOrdersTable";
+import { addPicks, hasPick, isShippableOrder, removePick } from "@/lib/pick-list";
+import { usePickList, writePickBack } from "@/components/pick/usePickList";
+import { CustomerOrdersTable, type CustomerOrderRow, type OrderPickAll } from "./CustomerOrdersTable";
 import { NewOrderForm } from "./NewOrderForm";
 import {
   OrderProductsPanel,
   type CatalogChoice,
   type ChargeChoice,
+  type OrderPick,
   type OrderProductLine,
   type SetItem,
 } from "./OrderProductsPanel";
@@ -121,6 +124,9 @@ function applyFilters(rows: CustomerOrderRow[], filters: Filters, lines: OrderPr
 
 export function CustomerOrdersWorkspace({
   rows,
+  userId,
+  openOrderId,
+  openProductId,
   mayApprove,
   customers,
   addresses,
@@ -134,6 +140,12 @@ export function CustomerOrdersWorkspace({
   charges,
 }: {
   rows: CustomerOrderRow[];
+  /** The login that owns the pick list kept in this browser. */
+  userId: string;
+  /** Back from the pick list: the order whose products open, and the product to select. */
+  openOrderId: string | null;
+  openProductId: string | null;
+  /** Admin and warehouse. They also pick and ship. */
   mayApprove: boolean;
   customers: Customer[];
   addresses: Address[];
@@ -146,13 +158,19 @@ export function CustomerOrdersWorkspace({
   catalog: CatalogChoice[];
   charges: ChargeChoice[];
 }) {
-  const [openId, setOpenId] = useState<string | null>(null);
+  const returnTo = rows.some((row) => row.id === openOrderId) ? openOrderId : null;
+  const [openId, setOpenId] = useState<string | null>(returnTo);
+  /** The product row to select in the products panel, until the panel closes. */
+  const [focusProductId, setFocusProductId] = useState<string | null>(
+    returnTo ? openProductId : null,
+  );
   const [filterOpen, setFilterOpen] = useState(false);
   const [draft, setDraft] = useState<Filters>(EMPTY);
   const [applied, setApplied] = useState<Filters>(EMPTY);
   const [comboKey, setComboKey] = useState(0);
-  const [focusId, setFocusId] = useState<string | null>(null);
-  const [focusNonce, setFocusNonce] = useState(0);
+  const [focusId, setFocusId] = useState<string | null>(returnTo);
+  const [focusNonce, setFocusNonce] = useState(returnTo ? 1 : 0);
+  const pickList = usePickList(userId);
   const [sort, setSort] = useState<string>(SORT.orderNo);
   const [productPick, setProductPick] = useState("");
   const filtered = useMemo(
@@ -204,6 +222,40 @@ export function CustomerOrdersWorkspace({
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
   }, [catalog, lines]);
+
+  /** This order's picked products, while the order can ship and the login may ship. */
+  const mayPick = mayApprove && pickList.ready;
+  const pickedHere = new Set(
+    order
+      ? pickList.list
+          .flatMap((customer) => customer.orders)
+          .filter((item) => item.order_id === order.id)
+          .flatMap((item) => item.products)
+      : [],
+  );
+  const orderPick: OrderPick | null =
+    mayPick && order && isShippableOrder(order.status)
+      ? {
+          picked: pickedHere,
+          onToggle: (productId) => {
+            if (pickedHere.has(productId)) {
+              pickList.update((list) => removePick(list, order.id, productId));
+              return;
+            }
+            pickList.update((list) => addPicks(list, order.customer_id, order.id, [productId]));
+            writePickBack(userId, { order_id: order.id, product_id: productId });
+          },
+        }
+      : null;
+  const pickAll: OrderPickAll | null = mayPick
+    ? {
+        isPicked: (orderId, productId) => hasPick(pickList.list, orderId, productId),
+        onPickAll: (row, productIds) => {
+          pickList.update((list) => addPicks(list, row.customer_id, row.id, productIds));
+          writePickBack(userId, { order_id: row.id, product_id: null });
+        },
+      }
+    : null;
 
   function addProduct() {
     if (!productPick || draft.productIds.includes(productPick)) return;
@@ -306,13 +358,20 @@ export function CustomerOrdersWorkspace({
           terms={terms}
           lines={lines}
           onOpen={setOpenId}
+          pickAll={pickAll}
           focusId={focusId}
           focusNonce={focusNonce}
         />
       </FitPage>
       <OrderProductsPanel
         open={openId != null}
-        onClose={() => setOpenId(null)}
+        onClose={() => {
+          setOpenId(null);
+          setFocusProductId(null);
+        }}
+        pick={orderPick}
+        focusProductId={focusProductId}
+        focusNonce={focusProductId ? 1 : 0}
         orderId={openId}
         orderNo={order?.order_no ?? null}
         customer={order?.customer ?? null}

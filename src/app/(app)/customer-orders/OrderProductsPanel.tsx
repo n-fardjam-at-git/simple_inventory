@@ -19,6 +19,7 @@ import { QtyCopyPopup, snapshotQtyCopy, type QtyCopy } from "../cutting-orders/Q
 import { ProductInventoryPopup } from "./ProductInventoryPopup";
 import { LINE_STATUS, orderStatusLabel } from "@/lib/customer-order";
 import { PRODUCT_TYPE } from "@/lib/product-type";
+import { isPickableLine } from "@/lib/pick-list";
 import { summarizeOrder, type SummaryLine } from "@/lib/order-summary";
 import {
   addCustomerOrderCharge,
@@ -35,6 +36,16 @@ import {
 export type OrderProductLine = {
   customer_order_id: string;
   product_id: string;
+  /**
+   * What the pick list can still ship: ordered minus shipped for merchandise,
+   * 1 for a charge that is on no shipment yet. Only Customer orders fills it.
+   */
+  left_to_ship?: number;
+  /**
+   * On a customer shipment that is not shipped and not canceled. The row reads Picking
+   * and has no Pick. Only Customer orders fills it.
+   */
+  picking?: boolean;
   status: string;
   type: number;
   qty: number | null;
@@ -103,8 +114,44 @@ const defaultWrites: OrderProductWrites = {
   pasteCells: pasteCustomerOrderCells,
 };
 
+/** The pick list, for an order that can ship. `picked` holds this order's picked product ids. */
+export type OrderPick = { picked: ReadonlySet<string>; onToggle: (productId: string) => void };
+
 const WritesContext = createContext<OrderProductWrites>(defaultWrites);
 const PanelModeContext = createContext({ showLifecycle: true, readOnly: false, showInventory: true });
+const PickContext = createContext<OrderPick | null>(null);
+
+/**
+ * Pick on a product row: adds the order product to the pick list. A picked row reads
+ * Picked, and a second click takes it off. It shows while the line can still ship.
+ * A line that is on an open shipment reads Picking instead: plain text, not a button.
+ */
+function PickButton({ row }: { row: OrderProductLine }) {
+  const pick = useContext(PickContext);
+  if (row.picking) {
+    return (
+      <span
+        className="cursor-default text-xs font-medium text-yellow-600"
+        title="On a shipment that has not shipped"
+      >
+        Picking
+      </span>
+    );
+  }
+  if (!pick) return null;
+  const picked = pick.picked.has(row.product_id);
+  if (!picked && !isPickableLine(row)) return null;
+  return (
+    <button
+      type="button"
+      className={`text-xs underline ${picked ? "font-medium text-teal-800" : "text-stone-700"}`}
+      title={picked ? "Take off the pick list" : "Add to the pick list"}
+      onClick={() => pick.onToggle(row.product_id)}
+    >
+      {picked ? "Picked" : "Pick"}
+    </button>
+  );
+}
 
 function useWrites() {
   return useContext(WritesContext);
@@ -161,7 +208,15 @@ export function OrderProductsPanel({
   showLifecycle = true,
   readOnly = false,
   showInventory = true,
+  pick = null,
+  focusProductId = null,
+  focusNonce = 0,
 }: {
+  /** Customer orders passes this while the order can ship and the login may ship. */
+  pick?: OrderPick | null;
+  /** Selects this product's row when the panel opens (Back from the pick list). */
+  focusProductId?: string | null;
+  focusNonce?: number;
   open: boolean;
   onClose: () => void;
   orderId: string | null;
@@ -219,6 +274,7 @@ export function OrderProductsPanel({
   return (
     <WritesContext.Provider value={writes}>
     <PanelModeContext.Provider value={{ showLifecycle, readOnly, showInventory }}>
+    <PickContext.Provider value={pick}>
     <>
     <DockedPanel
       open={open}
@@ -269,6 +325,8 @@ export function OrderProductsPanel({
           <OrderProductTable
             pickedInvProductId={pickedInv?.productId ?? null}
             onPickedInvClose={() => setPickedInv(null)}
+            focusId={focusProductId ? `${orderId}:${focusProductId}` : null}
+            focusNonce={focusNonce}
             rows={lines}
             copyId={copyLine ? `${copyLine.customer_order_id}:${copyLine.product_id}` : null}
             onCopy={(row) =>
@@ -332,6 +390,7 @@ export function OrderProductsPanel({
       onClose={() => setCopyProductId(null)}
     />
     </>
+    </PickContext.Provider>
     </PanelModeContext.Provider>
     </WritesContext.Provider>
   );
@@ -739,12 +798,16 @@ function OrderProductTable({
   onCopy,
   pickedInvProductId,
   onPickedInvClose,
+  focusId,
+  focusNonce,
 }: {
   rows: OrderProductLine[];
   copyId: string | null;
   onCopy: (row: OrderProductLine) => void;
   pickedInvProductId: string | null;
   onPickedInvClose: () => void;
+  focusId: string | null;
+  focusNonce: number;
 }) {
   const items = [...rows].sort((a, b) => {
     if (a.type !== b.type) return a.type - b.type;
@@ -756,6 +819,8 @@ function OrderProductTable({
         items={items}
         getKey={(row) => `${row.customer_order_id}:${row.product_id}`}
         stretch
+        focusId={focusId}
+        focusNonce={focusNonce}
         tableClassName="inventory-boards table-fixed"
         thead={
           <>
@@ -1058,6 +1123,7 @@ function ProductLineRow({
             deleting={pending}
             before={
               <>
+                <PickButton row={row} />
                 <button
                   ref={invBtn}
                   type="button"
@@ -1124,6 +1190,11 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
   const refreshRow = useRefreshRow(row);
   const writes = useWrites();
   const { showLifecycle, readOnly } = usePanelMode();
+  const pick = useContext(PickContext);
+  /** The chip stays as it was when this row has no Pick and is not Picking. */
+  const mayPick =
+    Boolean(row.picking) ||
+    Boolean(pick && (pick.picked.has(row.product_id) || isPickableLine(row)));
   const id = `${row.customer_order_id}:${row.product_id}`;
   const dirty =
     (showLifecycle && status !== row.status) ||
@@ -1299,6 +1370,7 @@ function ChargeLineRow({ row }: { row: OrderProductLine }) {
               dirty={dirty}
               saving={saving}
               deleting={pending}
+              before={mayPick ? <PickButton row={row} /> : undefined}
               onEdit={requestEdit}
               onSave={() => void persist()}
               onCancel={requestCancel}

@@ -38,7 +38,7 @@ function deleteMessage(error: { message: string }, what: string) {
     : error.message;
 }
 
-/** Approved and picking are set by admin or warehouse, not by a sales rep. */
+/** Approved is set by admin or warehouse, not by a sales rep. Picking is set by an open shipment. */
 async function maySetWorkflow() {
   const profile = await getProfile();
   return profile?.role === "admin" || profile?.role === "warehouse";
@@ -303,7 +303,7 @@ export async function updateCustomerOrderRow(
       return "That status is set from the merchandise lines.";
     }
     if (await merchandiseBlocksWorkflow(supabase, id)) {
-      return "Approved and Picking stay only while every open merchandise line is pending.";
+      return "Approved stays only while every open merchandise line is pending.";
     }
     next.status = patch.status;
   }
@@ -324,7 +324,7 @@ export async function approveCustomerOrder(orderId: string) {
   if (!order) return "That order is gone.";
   if (order.status !== "pending") return "Approve stays only while the order is pending.";
   if (await merchandiseBlocksWorkflow(supabase, orderId)) {
-    return "Approved and Picking stay only while every open merchandise line is pending.";
+    return "Approved stays only while every open merchandise line is pending.";
   }
   const { error } = await supabase
     .from("customer_orders")
@@ -348,6 +348,9 @@ export async function revokeCustomerOrder(orderId: string) {
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return "That order is gone.";
+  if (order.status === "picking") {
+    return "This order is on an open shipment. Ship, cancel, or delete that shipment first.";
+  }
   if (order.status !== "approved") return "Revoke stays only while the order is approved.";
   const { error } = await supabase
     .from("customer_orders")
@@ -421,7 +424,7 @@ export async function updateCustomerOrder(orderId: string, formData: FormData) {
     }
     if (await merchandiseBlocksWorkflow(supabase, orderId)) {
       redirect(
-        orderError(orderId, "Approved and Picking stay only while every open merchandise line is pending."),
+        orderError(orderId, "Approved stays only while every open merchandise line is pending."),
       );
     }
     patch.status = status;

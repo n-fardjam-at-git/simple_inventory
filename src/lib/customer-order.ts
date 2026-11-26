@@ -16,7 +16,16 @@ export const LINE_STATUS = [
   "canceled",
 ] as const;
 
-export const WORKFLOW_STATUS = ["pending", "approved", "picking"] as const;
+/**
+ * The header statuses staff set by hand. Picking is automatic: an order is picking while one of
+ * its products is on a customer shipment that is not shipped and not canceled (migration 0072).
+ */
+export const WORKFLOW_STATUS = ["pending", "approved"] as const;
+
+/** Approved, or picking: an approved order that is on an open shipment. */
+export function isApprovedOrder(status: string | null | undefined) {
+  return status === "approved" || status === "picking";
+}
 
 export const SHIP_AT_ONCE = "Ship at once";
 
